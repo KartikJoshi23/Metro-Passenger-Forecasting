@@ -1,4 +1,6 @@
 # Dubai Metro Forecasting — Python pipeline / notebook
+# NOTE: use Python 3.10–3.12. TensorFlow has no wheels for 3.13/3.14 yet, so installs fail there.
+# (This file is for the model pipeline only — the Netlify/Pages dashboard build needs NO Python.)
 numpy
 pandas
 pyarrow

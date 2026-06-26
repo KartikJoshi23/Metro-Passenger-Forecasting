@@ -50,10 +50,12 @@ This repo auto-deploys the dashboard to **GitHub Pages** on every push to `main`
 **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 The site then publishes at `https://<owner>.github.io/Metro-Passenger-Forecasting/`.
 
-Alternatively deploy to **Netlify** — `frontend/netlify.toml` is preconfigured
-(base `frontend`, build `npm run build`, publish `dist`).
+Alternatively deploy to **Netlify** — the root `netlify.toml` is preconfigured with
+`base = "frontend"`, so Netlify builds only the npm app (`npm run build` → `frontend/dist`)
+and never touches Python. Just "Add new site → Import from Git" and pick this repo.
 
 ## 🔬 Reproduce the model
+> Use **Python 3.10–3.12** (TensorFlow has no wheels for 3.13/3.14 yet).
 ```bash
 pip install -r requirements.txt
 # place Dubai Pulse metro_ridership_*.csv files in data/raw/ (free registration), then:

@@ -1,0 +1,17 @@
+# Netlify reads this file from the REPO ROOT.
+# `base = "frontend"` makes Netlify cd into frontend/ for the whole build, so it only sees
+# the npm project there and never tries to pip-install the root requirements.txt
+# (TensorFlow has no wheel for Netlify's Python — that was the build failure).
+[build]
+  base = "frontend"
+  command = "npm run build"
+  publish = "dist"          # relative to base -> frontend/dist
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# SPA fallback so refresh/deep-links work
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
