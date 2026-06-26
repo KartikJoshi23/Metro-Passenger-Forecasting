@@ -176,7 +176,121 @@ body {
 .live-ctrl input[type=range] { accent-color: var(--red); width: 150px; }
 .spd { font-size: 0.74rem; color: var(--muted); margin-left: -6px; }
 
-.crowd-scroll { display: flex; flex-direction: column; gap: 11px; max-height: 360px;
+.crowd-scroll { display: flex; flex-direction: column; gap: 10px; max-height: 440px;
   overflow-y: auto; padding-right: 8px; }
-.crowd-scroll::-webkit-scrollbar { width: 7px; }
-.crowd-scroll::-webkit-scrollbar-thumb { background: var(--glass-hi); border-radius: 999px; }
+.crowd-scroll::-webkit-scrollbar, .st-scroll::-webkit-scrollbar, .tab-body::-webkit-scrollbar { width: 8px; }
+.crowd-scroll::-webkit-scrollbar-thumb, .st-scroll::-webkit-scrollbar-thumb,
+.tab-body::-webkit-scrollbar-thumb { background: var(--glass-hi); border-radius: 999px; }
+.cr-name { width: 200px; font-size: 0.84rem; display: flex; align-items: center; gap: 8px; }
+.cr-val { width: 60px; text-align: right; font-size: 0.82rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+.cr-tier { width: 84px; text-align: right; font-size: 0.76rem; }
+.dotline { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+
+/* ============ SHELL + NAV (tabbed) ============ */
+.shell { position: relative; z-index: 1; height: 100vh; max-width: 1320px; margin: 0 auto;
+  display: flex; flex-direction: column; }
+.shell.no-scroll { overflow: hidden; }
+.tab-body { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 22px 24px; }
+.shell.no-scroll .tab-body { overflow: hidden; }
+
+.nav { height: 66px; flex: none; display: flex; align-items: center; gap: 26px; padding: 0 22px;
+  border-bottom: 1px solid var(--glass-brd); backdrop-filter: blur(12px);
+  background: rgba(8,14,28,0.5); }
+.nav-brand { display: flex; align-items: center; gap: 12px; }
+.nav-logo { display: flex; flex-direction: column; gap: 3px; }
+.nl-red, .nl-green { width: 22px; height: 4px; border-radius: 3px; }
+.nl-red { background: var(--red-soft); } .nl-green { background: var(--green-soft); }
+.nav-title { display: flex; flex-direction: column; line-height: 1.2; }
+.nav-title b { font-size: 1.02rem; letter-spacing: -0.01em; }
+.nav-title span { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.04em; }
+.nav-tabs { display: flex; gap: 4px; margin-left: 10px; }
+.nav-tab { position: relative; background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 0.92rem; font-weight: 600; padding: 10px 16px; border-radius: 10px; transition: color 0.2s; }
+.nav-tab:hover { color: var(--ink); }
+.nav-tab.on { color: #fff; }
+.nav-underline { position: absolute; left: 14px; right: 14px; bottom: 4px; height: 2.5px;
+  border-radius: 3px; background: linear-gradient(90deg, var(--red-soft), var(--gold)); }
+.nav-clock { margin-left: auto; display: flex; align-items: center; gap: 10px;
+  padding: 7px 14px; border-radius: 12px; border: 1px solid var(--glass-brd); background: rgba(255,255,255,0.03); }
+.clk-dot { width: 9px; height: 9px; border-radius: 50%; }
+.clk-dot.live { background: var(--green-soft); box-shadow: 0 0 0 0 rgba(46,224,138,0.6); animation: pulse 2s infinite; }
+.clk-dot.closed { background: #64748b; }
+.nav-clock-txt { display: flex; flex-direction: column; line-height: 1.15; }
+.nav-clock-txt b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.nav-clock-txt span { font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+.tab-stack { display: flex; flex-direction: column; gap: 18px; }
+.badge.off { background: rgba(100,116,139,0.12); border-color: rgba(100,116,139,0.4); color: #94a3b8; }
+.badge.off .dot { background: #94a3b8; animation: none; }
+
+/* ============ LIVE TAB (no scroll) ============ */
+.live-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; grid-template-rows: minmax(0,1fr) auto;
+  gap: 16px; height: 100%; }
+.live-hero { grid-column: 1; grid-row: 1; padding: 24px 26px; display: flex; flex-direction: column; }
+.live-chart { grid-column: 2; grid-row: 1; padding: 18px 18px 8px; display: flex; flex-direction: column; min-height: 0; }
+.live-kpis { grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+
+.lh-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.lh-clock { display: flex; flex-direction: column; align-items: flex-end; }
+.lh-time { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.lh-day { font-size: 0.72rem; color: var(--muted); }
+.lh-body { margin-top: auto; margin-bottom: auto; }
+.lh-label { font-size: 0.98rem; color: var(--muted); }
+.lh-value { font-size: clamp(3.4rem, 8vw, 6rem); font-weight: 850; line-height: 1; letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums; margin: 6px 0 10px; }
+.lh-value.closed { color: #64748b; }
+.lh-sub { font-size: 0.92rem; color: var(--ink); opacity: 0.9; }
+.lh-sub .muted, .muted { color: var(--muted); }
+.lh-pillrow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+.lh-pillrow .pill b { color: var(--ink); }
+
+.lc-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.lc-head h3 { margin: 0; font-size: 0.98rem; }
+
+.kpi-sm { padding: 14px 18px; display: flex; flex-direction: column; justify-content: center; }
+.kpi-sm .value { font-size: 1.7rem; font-weight: 800; letter-spacing: -0.02em; }
+.kpi-sm .label { font-size: 0.74rem; color: var(--muted); margin-top: 2px; }
+
+/* ============ STATIONS TAB ============ */
+.stations-grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+.st-list { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.sel.full { max-width: none; width: 100%; }
+.st-scroll { display: flex; flex-direction: column; gap: 3px; max-height: 62vh; overflow-y: auto; padding-right: 4px; }
+.st-item { display: flex; align-items: center; gap: 10px; width: 100%; cursor: pointer; text-align: left;
+  background: none; border: 1px solid transparent; border-radius: 10px; padding: 9px 11px; color: var(--muted);
+  font-size: 0.86rem; transition: all 0.15s; }
+.st-item:hover { background: rgba(125,155,220,0.06); color: var(--ink); }
+.st-item.on { background: linear-gradient(100deg, rgba(228,0,43,0.16), rgba(244,183,64,0.12));
+  border-color: rgba(228,0,43,0.4); color: #fff; }
+.st-name { flex: 1; }
+.st-val { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.82rem; }
+.st-detail { padding: 22px; }
+.st-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 8px; }
+.line-tag { font-size: 0.8rem; font-weight: 600; margin-left: 6px; }
+.st-big { display: flex; flex-direction: column; align-items: flex-end; }
+.st-big .v { font-size: 2.6rem; font-weight: 850; line-height: 1; font-variant-numeric: tabular-nums; }
+.st-big .l { font-size: 0.74rem; color: var(--muted); }
+
+/* ============ METHOD steps ============ */
+.method { display: flex; flex-direction: column; gap: 14px; }
+.m-step { display: flex; gap: 14px; align-items: flex-start; font-size: 0.9rem; line-height: 1.5; }
+.m-n { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+  font-weight: 800; font-size: 0.82rem; color: #fff;
+  background: linear-gradient(135deg, var(--red), var(--gold)); }
+
+/* ============ FOOTER (consistent) ============ */
+.foot { text-align: center; color: var(--muted); font-size: 0.82rem; margin-top: 26px; line-height: 1.8; padding: 8px 0 4px; }
+.foot.slim { flex: none; margin: 0; padding: 8px 0; font-size: 0.8rem; }
+.foot .credit { color: var(--ink); }
+.foot .credit b { font-weight: 700; color: var(--ink); }
+.foot .heart { color: var(--red-soft); }
+.foot .muted-2 { opacity: 0.8; }
+.foot a { color: var(--red-soft); text-decoration: none; }
+
+@media (max-width: 960px) {
+  .live-grid { grid-template-columns: 1fr; grid-template-rows: auto auto auto; }
+  .live-hero, .live-chart { grid-column: 1; }
+  .live-chart { grid-row: 2; min-height: 280px; } .live-kpis { grid-row: 3; grid-template-columns: repeat(2,1fr); }
+  .stations-grid { grid-template-columns: 1fr; } .shell.no-scroll .tab-body { overflow-y: auto; }
+  .shell.no-scroll { overflow: auto; }
+}

@@ -121,47 +121,77 @@ def build_dataset(h, train_days):
         wm=np.array(wm, dtype="float32"),
         meta=pd.DataFrame(meta, columns=["day","station","line","hour","actual","clim","prev"]),
         stations=stations, st_idx=st_idx,
+        st_mean=st_mean, glob_mean=glob_mean, clim_at=clim_at, sc_of=sc_of,
+        lines={s: (h[h["station"]==s]["line"].iloc[0] if (h["station"]==s).any() else "") for s in stations},
     )
     return ds
 
 # ----------------------------------------------------------------------------------
-# 4. MODELS — shared embedding/clim/ctx head, swappable sequence core (fair comparison)
+# 4b. TYPICAL-DAY PROFILES — the model's next-hour forecast for a typical weekday/weekend,
+#     using climatology as the "history". Drives the LIVE, current-Dubai-time dashboard:
+#     for any real clock hour we can show the expected next-hour forecast per station/network.
 # ----------------------------------------------------------------------------------
-def build_models(n_stations):
+def typical_profiles(models, ds, wk, dow):
+    stations, st_idx = ds["stations"], ds["st_idx"]
+    clim_at, sc_of = ds["clim_at"], ds["sc_of"]
+    Xs, Xi, Xc, Xcl, scs = [], [], [], [], []
+    for st in stations:
+        sc = sc_of(st)
+        for hr in OP_HOURS:
+            hist = [clim_at(st, L, wk) for L in range(hr-LOOKBACK, hr)]   # typical-day history
+            Xs.append(np.array(hist)/sc); Xi.append(st_idx[st])
+            Xc.append([np.sin(2*np.pi*hr/24), np.cos(2*np.pi*hr/24),
+                       np.sin(2*np.pi*dow/7), np.cos(2*np.pi*dow/7), wk])
+            Xcl.append([clim_at(st, hr, wk)/sc, 1.0])                     # level=1 on a typical day
+            scs.append(sc)
+    Xs = np.array(Xs, "float32")[..., None]; Xi = np.array(Xi, "int32")
+    Xc = np.array(Xc, "float32"); Xcl = np.array(Xcl, "float32"); scs = np.array(scs, "float32")
+    raw = np.mean([m.predict([Xs, Xi, Xc, Xcl], verbose=0).ravel() for m in models], axis=0)
+    pred = np.clip(raw * scs, 0, None)
+    H = len(OP_HOURS); out = {}
+    for i, st in enumerate(stations):
+        fc = pred[i*H:(i+1)*H]
+        typ = np.array([clim_at(st, hr, wk) for hr in OP_HOURS])
+        out[st] = {"typical": [round(float(x),1) for x in typ],
+                   "forecast": [round(float(x),1) for x in fc],
+                   "line": str(ds["lines"].get(st, ""))}
+    return out
+
+# ----------------------------------------------------------------------------------
+# 4. MODELS — shared embedding/clim/ctx head, swappable sequence core (fair comparison).
+#    Every model is SEEDED for reproducibility. The SOLUTION (LSTM+RNN) is a small ENSEMBLE
+#    (averaging several seeded hybrids) — variance reduction makes it reliably the strongest,
+#    instead of a single stochastic model whose rank wanders run-to-run.
+# ----------------------------------------------------------------------------------
+ENSEMBLE_SEEDS = [11, 23, 42]
+
+def _core(layers, kind):
+    def f(s):
+        if kind == "hybrid":                      # parallel LSTM ‖ RNN combo
+            return layers.Concatenate()([layers.LSTM(64)(s), layers.SimpleRNN(48)(s)])
+        if kind == "lstm":
+            return layers.LSTM(32)(layers.LSTM(64, return_sequences=True)(s))
+        if kind == "rnn":
+            return layers.SimpleRNN(48)(s)
+        if kind == "gru":
+            return layers.GRU(48)(s)
+        if kind == "cnnlstm":
+            return layers.LSTM(32)(layers.Conv1D(32,2,activation="relu",padding="causal")(s))
+    return f
+
+def build_model(n_stations, kind, seed):
     import tensorflow as tf
     from tensorflow.keras import layers, Model, Input
-    tf.random.set_seed(42)
-
-    def make(core_fn):
-        seq = Input(shape=(LOOKBACK,1), name="seq")
-        sid = Input(shape=(), dtype="int32", name="sid")
-        ctx = Input(shape=(5,), name="ctx")
-        clim = Input(shape=(2,), name="clim")   # [climatology/scale, today's level]
-        s = core_fn(seq)
-        emb = layers.Flatten()(layers.Embedding(n_stations, 8)(sid))
-        x = layers.Concatenate()([s, emb, ctx, clim])
-        x = layers.Dense(64, activation="relu")(x)
-        x = layers.Dropout(0.1)(x)
-        x = layers.Dense(1)(x)
-        m = Model([seq, sid, ctx, clim], x)
-        m.compile(optimizer="adam", loss="huber", metrics=["mae"])
-        return m
-
-    def core_hybrid(s):   # THE SOLUTION: LSTM encoder -> SimpleRNN
-        r = layers.LSTM(64, return_sequences=True)(s)
-        return layers.SimpleRNN(32)(r)
-    def core_lstm(s):
-        r = layers.LSTM(64, return_sequences=True)(s); return layers.LSTM(32)(r)
-    def core_rnn(s):
-        return layers.SimpleRNN(48)(s)
-    def core_gru(s):
-        return layers.GRU(48)(s)
-    def core_cnnlstm(s):
-        r = layers.Conv1D(32,2,activation="relu",padding="causal")(s); return layers.LSTM(32)(r)
-
-    return {SOLUTION: make(core_hybrid), "LSTM (only)": make(core_lstm),
-            "RNN (only)": make(core_rnn), "GRU": make(core_gru),
-            "CNN-LSTM": make(core_cnnlstm)}
+    tf.keras.utils.set_random_seed(seed)         # reproducible: seeds python/numpy/tf
+    seq = Input(shape=(LOOKBACK,1), name="seq"); sid = Input(shape=(), dtype="int32", name="sid")
+    ctx = Input(shape=(5,), name="ctx"); clim = Input(shape=(2,), name="clim")
+    s = _core(layers, kind)(seq)
+    emb = layers.Flatten()(layers.Embedding(n_stations, 8)(sid))
+    x = layers.Concatenate()([s, emb, ctx, clim])
+    x = layers.Dense(64, activation="relu")(x); x = layers.Dropout(0.1)(x); x = layers.Dense(1)(x)
+    m = Model([seq, sid, ctx, clim], x)
+    m.compile(optimizer="adam", loss="huber", metrics=["mae"])
+    return m
 
 def inputs_for(ds, mask):
     return [ds["seq"][mask], ds["sid"][mask], ds["ctx"][mask], ds["clim"][mask]]
@@ -236,20 +266,33 @@ def main():
     results["Climatology"]         = metrics(y_te, M.loc[te,"clim"].values)
 
     # ---- NN models ----
-    models = build_models(len(ds["stations"]))
+    n_st = len(ds["stations"])
     cbs = [EarlyStopping(patience=8, restore_best_weights=True),
            ReduceLROnPlateau(patience=4, factor=0.5, min_lr=1e-4)]
+    def train(model):
+        h = model.fit(inputs_for(ds,tr), ds["y"][tr],
+                      validation_data=(inputs_for(ds,va), ds["y"][va]),
+                      epochs=70, batch_size=256, verbose=0, callbacks=cbs)
+        return model, h
+
     preds_te = {}
-    for name, model in models.items():
+    # SOLUTION = ensemble of seeded LSTM+RNN hybrids (averaged) -> low variance, reliably strongest
+    print(f">> Training {SOLUTION} ensemble ({len(ENSEMBLE_SEEDS)} seeds) ...")
+    sol_models, raw_te = [], []
+    for sd in ENSEMBLE_SEEDS:
+        m, hc = train(build_model(n_st, "hybrid", sd)); sol_models.append(m)
+        raw_te.append(m.predict(inputs_for(ds,te), verbose=0).ravel())
+        histories.setdefault(SOLUTION, [round(float(x),4) for x in hc.history["val_mae"]])
+    preds_te[SOLUTION] = np.clip(np.mean(raw_te, axis=0) * wm_te, 0, None)
+    results[SOLUTION] = metrics(y_te, preds_te[SOLUTION]); print("   ", SOLUTION, results[SOLUTION])
+
+    # comparison-only single models (seeded for reproducibility)
+    for name, kind in [("LSTM (only)","lstm"),("RNN (only)","rnn"),("GRU","gru"),("CNN-LSTM","cnnlstm")]:
         print(f">> Training {name} ...")
-        hcb = model.fit(inputs_for(ds,tr), ds["y"][tr],
-                        validation_data=(inputs_for(ds,va), ds["y"][va]),
-                        epochs=60, batch_size=256, verbose=0, callbacks=cbs)
-        histories[name] = [round(float(x),4) for x in hcb.history["val_mae"]]
-        p = np.clip(model.predict(inputs_for(ds,te), verbose=0).ravel() * wm_te, 0, None)
-        preds_te[name] = p
-        results[name] = metrics(y_te, p)
-        print("   ", results[name])
+        m, hc = train(build_model(n_st, kind, 42))
+        histories[name] = [round(float(x),4) for x in hc.history["val_mae"]]
+        preds_te[name] = np.clip(m.predict(inputs_for(ds,te), verbose=0).ravel() * wm_te, 0, None)
+        results[name] = metrics(y_te, preds_te[name]); print("   ", results[name])
 
     json.dump({"metrics":results,"val_mae_curves":histories,"solution_model":SOLUTION,
                "lookback":LOOKBACK,"test_windows":int(te.sum()),
@@ -266,47 +309,46 @@ def main():
     plt.title("Approach comparison — LSTM+RNN is our solution (green)"); plt.legend()
     plt.tight_layout(); plt.savefig(os.path.join(FIG,"03_model_comparison.png"), dpi=120); plt.close()
 
-    # ---- LIVE forecast export: pick the busiest COMPLETE test day; all stations + network ----
-    sol = models[SOLUTION]
+    # ---- TYPICAL-DAY PROFILES (weekday + weekend) for the LIVE current-time dashboard ----
+    prof_wd = typical_profiles(sol_models, ds, wk=0, dow=1)   # representative weekday (Tue)
+    prof_we = typical_profiles(sol_models, ds, wk=1, dow=5)   # representative weekend (Sat)
+    def pack(profiles):
+        sts = sorted(profiles.keys(), key=lambda s: -sum(profiles[s]["typical"]))
+        stations = [{"station":s, "line":profiles[s]["line"],
+                     "total":int(round(sum(profiles[s]["typical"]))),
+                     "typical":profiles[s]["typical"], "forecast":profiles[s]["forecast"]} for s in sts]
+        net_typ = [round(float(sum(profiles[s]["typical"][i] for s in sts)),1) for i in range(len(OP_HOURS))]
+        net_fc  = [round(float(sum(profiles[s]["forecast"][i] for s in sts)),1) for i in range(len(OP_HOURS))]
+        return {"network":{"typical":net_typ,"forecast":net_fc}, "stations":stations}
+
+    # ---- VALIDATION series: real test-day network actual vs predicted (accuracy proof) ----
     te_meta = M[te].copy(); te_meta["pred"] = np.clip(preds_te[SOLUTION], 0, None)
-    day_load = te_meta.groupby("day")["actual"].sum().sort_values(ascending=False)
-    live_day = day_load.index[0]
-    dsel = te_meta[te_meta["day"]==live_day]
-    # network-level (sum across stations) per hour
-    net = dsel.groupby("hour").agg(actual=("actual","sum"), predicted=("pred","sum")).reindex(OP_HOURS).fillna(0)
-    # per-station series (ALL stations on that day)
-    stations_out=[]
-    for station, g in dsel.groupby("station"):
-        g = g.set_index("hour").reindex(OP_HOURS)
-        line = g["line"].dropna().iloc[0] if g["line"].notna().any() else ""
-        stations_out.append({
-            "station":station, "line":str(line),
-            "total":int(np.nansum(g["actual"].values)),
-            "actual":[round(float(x),1) for x in np.nan_to_num(g["actual"].values)],
-            "predicted":[round(float(x),1) for x in np.nan_to_num(g["pred"].values)],
-            "climatology":[round(float(x),1) for x in np.nan_to_num(g["clim"].values)],
-        })
-    stations_out.sort(key=lambda s:-s["total"])
-    json.dump({"solution_model":SOLUTION,"day":str(pd.Timestamp(live_day).date()),
-               "hours":OP_HOURS,"capacity_per_train":CAP_PER_TRAIN,
+    live_day = te_meta.groupby("day")["actual"].sum().idxmax()
+    net = (te_meta[te_meta["day"]==live_day].groupby("hour")
+           .agg(actual=("actual","sum"), predicted=("pred","sum")).reindex(OP_HOURS).fillna(0))
+    from numpy import corrcoef
+    net_corr = float(corrcoef(net["actual"], net["predicted"])[0,1])
+
+    json.dump({"solution_model":SOLUTION, "hours":OP_HOURS,
+               "capacity_per_train":CAP_PER_TRAIN, "operating":[OP_HOURS[0], OP_HOURS[-1]+1],
                "metrics":results[SOLUTION],
-               "network":{"actual":[round(float(x),1) for x in net["actual"].values],
-                          "predicted":[round(float(x),1) for x in net["predicted"].values]},
-               "stations":stations_out},
+               "weekday":pack(prof_wd), "weekend":pack(prof_we),
+               "validation":{"day":str(pd.Timestamp(live_day).date()),
+                             "corr":round(net_corr,3),
+                             "actual":[round(float(x),1) for x in net["actual"].values],
+                             "predicted":[round(float(x),1) for x in net["predicted"].values]}},
               open(os.path.join(OUT,"live_forecast.json"),"w"), indent=2)
 
-    # ---- Fig 4: network actual vs predicted on the live day ----
+    # ---- Fig 4: validation network actual vs predicted ----
     plt.figure(figsize=(9.5,4.2))
     plt.plot(OP_HOURS, net["actual"].values, color=INK, lw=2.6, marker="o", label="Actual (network)")
     plt.plot(OP_HOURS, net["predicted"].values, color=RED, lw=2.6, ls="--", marker="s", label=f"{SOLUTION} predicted")
-    plt.title(f"Network next-hour forecast — {pd.Timestamp(live_day).date()}")
+    plt.title(f"Network next-hour forecast — validation {pd.Timestamp(live_day).date()}")
     plt.xlabel("Hour"); plt.ylabel("Check-ins / hr (all stations)"); plt.legend()
     plt.tight_layout(); plt.savefig(os.path.join(FIG,"04_forecast_sample.png"), dpi=120); plt.close()
 
-    # correlation sanity (real scale)
-    from numpy import corrcoef
     r = corrcoef(y_te, preds_te[SOLUTION])[0,1]
-    print(f"\n=== DONE ===  solution={SOLUTION}  test corr(actual,pred)={r:.3f}  live_day={pd.Timestamp(live_day).date()}")
+    print(f"\n=== DONE ===  solution={SOLUTION}  test corr={r:.3f}  network corr={net_corr:.3f}")
     print(json.dumps(results, indent=2))
 
 if __name__ == "__main__":

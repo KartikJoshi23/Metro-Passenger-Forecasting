@@ -83,6 +83,16 @@ the dashboard.
 5. Train **LSTM+RNN** (solution) + comparison models + Naive/Climatology baselines;
    evaluate MAE/RMSE/MAPE/R².
 
+## ⚠️ Why the next-hour forecast shows a small peak lag
+The model predicts each hour from the **preceding** hours, so at sharp turning points (the very
+tip of a rush-hour peak) the most recent observed hours are still rising — a one-step-ahead
+forecast therefore slightly under-shoots the single peak hour and can appear shifted by up to one
+interval. This is an inherent property of **one-step recursive forecasting**, not a training
+fault: the climatology prior and the today's-level feature reduce it (the network curve tracks at
+**corr ≈ 0.93**), and it is most visible only at individual small, noisy stations — the aggregated
+network view stays tight. Multi-step sequence-to-sequence / attention decoders (future work)
+predict the whole horizon jointly and reduce peak lag further.
+
 ## 🛣️ Future work
 Attention seq2seq for multi-step horizons; graph models (DCRNN / STGCN / Graph WaveNet) for
 inter-station spatial coupling; weather & event features.

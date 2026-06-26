@@ -1,55 +1,61 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import type { LiveFile } from "../types";
+import type { DubaiClock } from "../useDubaiClock";
+import { liveState, fmt } from "../live";
 
-// Real Dubai Metro train capacity (RTA capacity dataset): 5 cars, 643 passengers/train.
-// Hourly boarding-capacity proxy at ~5-min peak headway; sampled extract scaled for a load index.
-export default function AllStationsCrowding({ live }: { live: LiveFile }) {
+// Crowding = forecast inflow for the upcoming hour ÷ a per-station boarding-capacity proxy
+// derived from the real RTA train capacity (643 pax / 5-car train) at peak headway.
+export default function AllStationsCrowding({ live, clock }: { live: LiveFile; clock: DubaiClock }) {
+  const st = liveState(live, clock);
   const [q, setQ] = useState("");
-  const cap = live.capacity_per_train * 12 * 0.06;
+  const nextIdx = st.hours.indexOf(st.nextHour);
 
   const rows = useMemo(() => {
-    return live.stations
+    return st.profile.stations
       .map((s) => {
-        const peak = Math.max(...s.predicted);
-        return { station: s.station, line: s.line, peak: Math.round(peak), ratio: Math.min(1.4, peak / cap) };
+        const peak = Math.max(...s.forecast, 1);
+        const val = st.open && nextIdx >= 0 ? s.forecast[nextIdx] : 0;
+        return { station: s.station, line: s.line, val, ratio: val / peak };
       })
       .filter((r) => r.station.toLowerCase().includes(q.toLowerCase()))
-      .sort((a, b) => b.ratio - a.ratio);
-  }, [live, q, cap]);
+      .sort((a, b) => b.val - a.val);
+  }, [st, q, nextIdx]);
 
-  const band = (r: number): [string, string] =>
-    r < 0.55 ? ["#2ee08a", "Comfortable"] : r < 0.85 ? ["#f4b740", "Busy"] : ["#ff3b5c", "Crowded"];
+  const tier = (r: number): [string, string] =>
+    r >= 0.85 ? ["#ff3b5c", "Peak"] : r >= 0.6 ? ["#f4b740", "High"] :
+    r >= 0.35 ? ["#9cc0ff", "Moderate"] : ["#2ee08a", "Low"];
 
   return (
     <motion.div className="glass card"
-      initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }} transition={{ duration: 0.5 }}>
+      initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
       <div className="live-head">
         <div>
-          <h3>Predicted crowding — every station</h3>
+          <h3>Crowding outlook — every station</h3>
           <div className="cap">
-            Forecast peak ÷ train capacity (real RTA figure: {live.capacity_per_train} pax / 5-car train).
-            All {live.stations.length} stations on the network — search any.
+            {st.open
+              ? <>Forecast inflow for <b>{String(st.nextHour).padStart(2, "0")}:00</b> (next hour) across all {st.profile.stations.length} stations · live {clock.hhmm} GST</>
+              : <>Metro closed — showing today's {clock.isWeekend ? "weekend" : "weekday"} peak outlook</>}
           </div>
         </div>
         <input className="sel" placeholder="Search station…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="crowd-scroll">
         {rows.map((r, i) => {
-          const [color, lbl] = band(r.ratio);
+          const [color, lbl] = tier(r.ratio);
           return (
             <div key={r.station} className="gauge-row">
-              <div style={{ width: 168, fontSize: "0.84rem" }}>
-                <span style={{ color: r.line.includes("Red") ? "#ff6b82" : "#2ee08a", marginRight: 6 }}>●</span>
+              <div className="cr-name">
+                <span className="dotline" style={{ background: r.line.includes("Red") ? "#ff6b82" : "#2ee08a" }} />
                 {r.station}
               </div>
               <div className="bar-track">
                 <motion.div className="bar-fill" style={{ background: color }}
                   initial={{ width: 0 }} animate={{ width: `${Math.min(100, r.ratio * 100)}%` }}
-                  transition={{ delay: Math.min(i * 0.02, 0.5), duration: 0.6 }} />
+                  transition={{ delay: Math.min(i * 0.015, 0.4), duration: 0.5 }} />
               </div>
-              <div style={{ width: 96, textAlign: "right", fontSize: "0.76rem", color }}>{lbl}</div>
+              <div className="cr-val">{st.open ? fmt(r.val) : "—"}</div>
+              <div className="cr-tier" style={{ color }}>{lbl}</div>
             </div>
           );
         })}

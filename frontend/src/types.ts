@@ -11,22 +11,26 @@ export interface MetricsFile {
   lookback: number;
   test_windows: number;
 }
-export interface LiveStation {
+export interface ProfileStation {
   station: string;
   line: string;
   total: number;
-  actual: number[];
-  predicted: number[];
-  climatology: number[];
+  typical: number[];   // typical actual demand by hour (climatology)
+  forecast: number[];  // model next-hour forecast by hour
+}
+export interface DayProfile {
+  network: { typical: number[]; forecast: number[] };
+  stations: ProfileStation[];
 }
 export interface LiveFile {
   solution_model: string;
-  day: string;
-  hours: number[];
+  hours: number[];                 // operating hours, e.g. 5..23
   capacity_per_train: number;
+  operating: [number, number];     // [openHour, closeHour) e.g. [5, 24]
   metrics: Metric;
-  network: { actual: number[]; predicted: number[] };
-  stations: LiveStation[];
+  weekday: DayProfile;
+  weekend: DayProfile;
+  validation: { day: string; corr: number; actual: number[]; predicted: number[] };
 }
 export interface EdaFile {
   hours: number[];
