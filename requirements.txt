@@ -1,0 +1,11 @@
+# Dubai Metro Forecasting — Python pipeline / notebook
+numpy
+pandas
+pyarrow
+scikit-learn
+matplotlib
+tensorflow-cpu>=2.16   # provides tensorflow.keras (LSTM, SimpleRNN, GRU, Conv1D)
+# notebook tooling (optional, to run/convert the .ipynb)
+nbformat
+nbconvert
+ipykernel

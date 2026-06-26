@@ -1,0 +1,30 @@
+# ---- Python ----
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# ---- Node / frontend ----
+node_modules/
+frontend/dist/
+frontend/node_modules/
+*.local
+
+# ---- Data (large RTA open-data extracts; users download into data/raw/) ----
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- Preview ----
+**/.claude/
+
+# tsc -b build artifacts
+frontend/vite.config.js
+frontend/vite.config.d.ts
+*.tsbuildinfo
