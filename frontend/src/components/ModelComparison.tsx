@@ -2,13 +2,14 @@ import { motion } from "framer-motion";
 import type { MetricsFile } from "../types";
 
 export default function ModelComparison({ data, solution }: { data: MetricsFile; solution: string }) {
-  const baseline = "Naive (persistence)";
-  // Solution first, then other approaches sorted by MAE, baseline last.
+  const baselines = ["Naive (persistence)", "Climatology"];
+  const isBase = (n: string) => baselines.includes(n);
+  // Solution first, then other NN approaches by MAE, baselines last.
   const rows = Object.entries(data.metrics).sort((a, b) => {
     if (a[0] === solution) return -1;
     if (b[0] === solution) return 1;
-    if (a[0] === baseline) return 1;
-    if (b[0] === baseline) return -1;
+    if (isBase(a[0]) && !isBase(b[0])) return 1;
+    if (isBase(b[0]) && !isBase(a[0])) return -1;
     return a[1].MAE - b[1].MAE;
   });
   return (
@@ -32,7 +33,7 @@ export default function ModelComparison({ data, solution }: { data: MetricsFile;
                 <td>
                   {name}
                   {isSol && <span className="tag-best">OUR SOLUTION</span>}
-                  {name === baseline && <span className="tag-base">baseline</span>}
+                  {isBase(name) && <span className="tag-base">baseline</span>}
                 </td>
                 <td className={isSol ? "best" : ""}>{m.MAE}</td>
                 <td>{m.RMSE}</td>

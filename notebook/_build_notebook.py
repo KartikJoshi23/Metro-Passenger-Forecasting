@@ -1,132 +1,125 @@
-"""Generates dubai_metro_forecasting.ipynb from structured cells (mirrors pipeline.py)."""
+"""Generates dubai_metro_forecasting.ipynb mirroring pipeline.py (kept in sync)."""
 import nbformat as nbf
-nb = nbf.v4.new_notebook()
-C = []
+nb = nbf.v4.new_notebook(); C=[]
 def md(s): C.append(nbf.v4.new_markdown_cell(s))
 def code(s): C.append(nbf.v4.new_code_cell(s))
 
 md("""# 🚇 Dubai Metro — Next-Hour Passenger Forecasting (LSTM + RNN)
 
-**Goal.** Forecast the **next hour's** passenger **inflow** (check-ins) at each Dubai Metro
-station, so operators can add trains / staff *before* a surge.
+**Goal.** Forecast the **next hour's** passenger **inflow** (check-ins) at **every** Dubai Metro
+station, so operators can add trains/staff *before* a surge.
 
-**Data — real & current.** Dubai RTA Automated Fare Collection taps from
-**Dubai Pulse** (`rta_metro_ridership-open`). Real `txn_date / txn_time / start_location /
-line_name`, **2017→2026 (latest March 2026)**. We forecast next-hour **within each day**, so the
-sampled-day structure of the open data is handled correctly.
+**Data — real & latest.** Dubai RTA Automated Fare Collection taps from **Dubai Pulse**
+(`rta_metro_ridership-open`). We use the **2026 records only** — the latest operating regime —
+because older sampled days (2017–2020) are far lower-volume and would inject a train/test
+distribution shift.
 
-**The solution — an LSTM + RNN hybrid.** An `LSTM` encoder feeds a `SimpleRNN`, combining
-LSTM's long-range memory with the RNN's compact recent-momentum read. Standalone `LSTM`,
-standalone `RNN`, `GRU` and `CNN-LSTM` are trained **only for the end-of-project comparison
-table**. **Metrics:** MAE · RMSE · MAPE · R² (vs a naive persistence baseline).
+**The solution — an LSTM + RNN hybrid.** `LSTM(64) → SimpleRNN(32)`, enriched with a learned
+**station embedding** and a **station × hour × weekend climatology** prior, with **per-station
+scaling** and within-day windows. Standalone LSTM/RNN, GRU, CNN-LSTM and two non-NN baselines
+(Naive persistence, Climatology) form the **comparison table**. Metrics: MAE · RMSE · MAPE · R².
 """)
 
 code("""import os, glob, json, warnings
 import numpy as np, pandas as pd
 warnings.filterwarnings("ignore"); np.random.seed(42)
-import matplotlib; import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import layers, Model, Input
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
-tf.random.set_seed(42)
-print("TF", tf.__version__)
+tf.random.set_seed(42); print("TF", tf.__version__)
 
-RAW, PROC, OUT, FIG = "../data/raw", "../data/processed", "../outputs", "../outputs/figures"
-for d in (PROC, OUT, FIG): os.makedirs(d, exist_ok=True)
-RED, GREEN, INK, GRID = "#E4002B", "#00A651", "#0B1B3A", "#dfe6f3"
-plt.rcParams.update({"axes.grid":True,"grid.color":GRID,"font.size":11})
-LOOKBACK = 4; OP_HOURS = list(range(5,24))   # Dubai Metro ~05:00–24:00""")
+RAW, OUT, FIG = "../data/raw", "../outputs", "../outputs/figures"
+os.makedirs(FIG, exist_ok=True)
+RED, GREEN, INK = "#E4002B", "#00A651", "#0B1B3A"
+plt.rcParams.update({"axes.grid":True,"grid.color":"#dfe6f3","font.size":11})
+LOOKBACK=6; OP_HOURS=list(range(5,24)); SOLUTION="LSTM+RNN"; MIN_YEAR=2026; CAP=643""")
 
-md("## 1 · Load real Dubai AFC tap data\nWe keep **Check-in** events (= station inflow / entries).")
-code("""files = sorted(glob.glob(os.path.join(RAW, "metro_ridership_*.csv")))
-df = pd.read_csv(files[0], usecols=["txn_type","txn_date","txn_time","start_location","line_name"])
-df["txn_type"] = df["txn_type"].str.strip()
-df = df[df["txn_type"]=="Check in"].copy()
-df["date"]    = pd.to_datetime(df["txn_date"], errors="coerce"); df = df.dropna(subset=["date"])
-df["hour"]    = df["txn_time"].str.slice(0,2).astype(int)
-df["station"] = df["start_location"].str.replace(" Metro Station","",regex=False).str.strip()
-df["line"]    = df["line_name"].str.strip()
-print(f"check-in taps: {len(df):,} | days: {df['date'].nunique()} | stations: {df['station'].nunique()}")
-print("years:", sorted(df['date'].dt.year.unique()))
+md("## 1 · Load real Dubai AFC taps (2026, check-ins = inflow)")
+code("""f=sorted(glob.glob(os.path.join(RAW,"metro_ridership_*.csv")))[0]
+df=pd.read_csv(f, usecols=["txn_type","txn_date","txn_time","start_location","line_name"])
+df["txn_type"]=df["txn_type"].str.strip(); df=df[df["txn_type"]=="Check in"].copy()
+df["date"]=pd.to_datetime(df["txn_date"],errors="coerce"); df=df.dropna(subset=["date"])
+df=df[df["date"].dt.year>=MIN_YEAR].copy()
+df["hour"]=df["txn_time"].str.slice(0,2).astype(int)
+df["station"]=df["start_location"].str.replace(" Metro Station","",regex=False).str.strip()
+df["line"]=df["line_name"].str.strip()
+print(f"taps {len(df):,} | days {df['date'].nunique()} | stations {df['station'].nunique()}")
 df.head()""")
 
-md("## 2 · Exploratory analysis — the real Dubai demand signal")
-code("""prof = (df.groupby("hour").size()/df["date"].nunique()).reindex(OP_HOURS).fillna(0)
-isw  = df["date"].dt.dayofweek.isin([5,6])            # UAE weekend = Sat/Sun
-dwd, dwe = df[~isw]["date"].dt.normalize().nunique(), df[isw]["date"].dt.normalize().nunique()
-pwd = (df[~isw].groupby("hour").size()/max(1,dwd)).reindex(OP_HOURS).fillna(0)
-pwe = (df[isw].groupby("hour").size()/max(1,dwe)).reindex(OP_HOURS).fillna(0)
-top = df.groupby("station").size().sort_values(ascending=False).head(12)
-
-fig,ax = plt.subplots(1,2,figsize=(13,4.3))
+md("## 2 · EDA — real Dubai demand signal")
+code("""prof=(df.groupby("hour").size()/df["date"].nunique()).reindex(OP_HOURS).fillna(0)
+isw=df["date"].dt.dayofweek.isin([5,6])
+pwd=(df[~isw].groupby("hour").size()/max(1,df[~isw]["date"].dt.normalize().nunique())).reindex(OP_HOURS).fillna(0)
+pwe=(df[isw].groupby("hour").size()/max(1,df[isw]["date"].dt.normalize().nunique())).reindex(OP_HOURS).fillna(0)
+top=df.groupby("station").size().sort_values(ascending=False).head(12)
+fig,ax=plt.subplots(1,2,figsize=(13,4.3))
 ax[0].plot(OP_HOURS,prof.values,color=RED,lw=2.5,marker="o",label="All")
 ax[0].plot(OP_HOURS,pwd.values,color=INK,lw=1.8,ls="--",label="Weekday")
 ax[0].plot(OP_HOURS,pwe.values,color=GREEN,lw=1.8,ls=":",label="Weekend")
-ax[0].set(title="Average hourly inflow profile (real)",xlabel="Hour",ylabel="check-ins/station-hr"); ax[0].legend()
-top.sort_values().plot(kind="barh",color=RED,ax=ax[1]); ax[1].set(title="Busiest stations",xlabel="check-ins")
+ax[0].set(title="Avg hourly inflow profile",xlabel="Hour",ylabel="check-ins/station-hr"); ax[0].legend()
+top.sort_values().plot(kind="barh",color=RED,ax=ax[1]); ax[1].set(title="Busiest stations")
 plt.tight_layout(); plt.savefig(os.path.join(FIG,"01_intraday_profile.png"),dpi=120); plt.show()
-print("Top 5 (matches real Dubai rankings):", list(top.head(5).index))""")
+print("Top 5:", list(top.head(5).index))""")
 
-md("""**Validation:** the busiest stations (BurJuman, Union, Al Rigga, Mall of the Emirates,
-Burj Khalifa/Dubai Mall) match real Dubai Metro rankings, and the curve shows the genuine
-**morning (07–09)** and **evening (16–19)** peaks — confirming the data is authentic.""")
-
-md("## 3 · Aggregate to hourly station-level inflow\nReindex each (day, station) onto the full operating-hour grid; missing hours → 0.")
-code("""g = (df.groupby([df["date"].dt.normalize().rename("day"),"station","line","hour"])
-        .size().reset_index(name="inflow"))
-keys = g[["day","station","line"]].drop_duplicates()
-full = keys.assign(k=1).merge(pd.DataFrame({"hour":OP_HOURS,"k":1}),on="k").drop(columns="k")
-h = full.merge(g,on=["day","station","line","hour"],how="left")
-h["inflow"]=h["inflow"].fillna(0.0)
+md("## 3 · Hourly station-level inflow")
+code("""g=(df.groupby([df["date"].dt.normalize().rename("day"),"station","line","hour"]).size()
+     .reset_index(name="inflow"))
+keys=g[["day","station","line"]].drop_duplicates()
+full=keys.assign(k=1).merge(pd.DataFrame({"hour":OP_HOURS,"k":1}),on="k").drop(columns="k")
+h=full.merge(g,on=["day","station","line","hour"],how="left"); h["inflow"]=h["inflow"].fillna(0.0)
 h["dow"]=h["day"].dt.dayofweek; h["is_weekend"]=h["dow"].isin([5,6]).astype(int)
-h = h.sort_values(["station","day","hour"]).reset_index(drop=True)
-h.to_parquet(os.path.join(PROC,"hourly_station_inflow.parquet"))
+h=h.sort_values(["station","day","hour"]).reset_index(drop=True)
 print("hourly rows:", f"{len(h):,}"); h.head()""")
 
-md("""## 4 · Feature engineering + supervised windows (next-hour)
-For every (day, station) we slide a `LOOKBACK`-hour window → predict the **next hour**, *never
-crossing the day boundary*. Inflow is scaled by each station's mean so large and small stations
-train together; context features are cyclical hour & day-of-week + a weekend flag.""")
-code("""st_mean = h.groupby("station")["inflow"].mean().clip(lower=1.0)
-Xs, Xc, y, meta = [], [], [], []
-for (day,station),grp in h.groupby(["day","station"]):
-    grp=grp.sort_values("hour"); vals=grp["inflow"].values.astype("float32"); hrs=grp["hour"].values
-    sc=st_mean[station]; v=vals/sc
-    for i in range(LOOKBACK,len(v)):
-        Xs.append(v[i-LOOKBACK:i]); hr=hrs[i]; dow=grp["dow"].iloc[0]; wk=grp["is_weekend"].iloc[0]
-        Xc.append([np.sin(2*np.pi*hr/24),np.cos(2*np.pi*hr/24),
-                   np.sin(2*np.pi*dow/7),np.cos(2*np.pi*dow/7),wk])
-        y.append(v[i]); meta.append((pd.Timestamp(day),station,int(hr),float(sc),float(vals[i])))
-Xs=np.array(Xs)[...,None]; Xc=np.array(Xc,dtype="float32"); y=np.array(y,dtype="float32")
-meta=pd.DataFrame(meta,columns=["day","station","hour","scale","actual_real"])
-print("windows:",f"{len(y):,}","| seq",Xs.shape,"| ctx",Xc.shape)""")
-
-md("### Chronological split by day (no leakage)")
-code("""days=np.sort(meta["day"].unique()); n=len(days)
+md("""## 4 · Features — per-station scaling + climatology + today's level
+Chronological day split. **Climatology** (station×hour×weekend mean) is computed on **train days
+only** (leakage-safe) and gives the model the typical daily shape; the **level** = recent actual ÷
+recent typical scales that shape to today; a learned **station embedding** distinguishes stations.""")
+code("""days=np.sort(h["day"].unique()); n=len(days)
 tr_d,va_d,te_d=set(days[:int(n*.7)]),set(days[int(n*.7):int(n*.85)]),set(days[int(n*.85):])
-tr,va,te=[meta["day"].isin(s).values for s in (tr_d,va_d,te_d)]
-print(f"days train/val/test = {len(tr_d)}/{len(va_d)}/{len(te_d)} | windows {tr.sum()}/{va.sum()}/{te.sum()}")""")
+stations=sorted(h["station"].unique()); st_idx={s:i for i,s in enumerate(stations)}
+trh=h[h["day"].isin(tr_d)]; st_mean=trh.groupby("station")["inflow"].mean().clip(lower=1.0)
+gmean=float(trh["inflow"].mean())
+clim=trh.groupby(["station","hour","is_weekend"])["inflow"].mean()
+gclim=trh.groupby(["hour","is_weekend"])["inflow"].mean()
+def C(s,hr,wk):
+    hr=min(max(hr,5),23); v=clim.get((s,hr,wk))
+    return float(v) if (v==v and v is not None) else float(gclim.get((hr,wk),0.0))
+Xseq,Xsid,Xctx,Xclim,y,wm,meta=[],[],[],[],[],[],[]
+for (day,st,line),grp in h.groupby(["day","station","line"]):
+    grp=grp.sort_values("hour"); wk=int(grp["is_weekend"].iloc[0]); dow=int(grp["dow"].iloc[0])
+    inflow=dict(zip(grp["hour"],grp["inflow"])); sc=float(st_mean.get(st,gmean))
+    for hr in OP_HOURS:
+        hist=[inflow.get(L,C(st,L,wk)) for L in range(hr-LOOKBACK,hr)]
+        hcl=[C(st,L,wk) for L in range(hr-LOOKBACK,hr)]
+        level=float(np.clip(sum(hist)/max(sum(hcl),1e-6),0.2,5.0))
+        Xseq.append(np.array(hist)/sc); Xsid.append(st_idx[st])
+        Xctx.append([np.sin(2*np.pi*hr/24),np.cos(2*np.pi*hr/24),np.sin(2*np.pi*dow/7),np.cos(2*np.pi*dow/7),wk])
+        Xclim.append([C(st,hr,wk)/sc,level]); y.append(inflow.get(hr,0.0)/sc); wm.append(sc)
+        meta.append((pd.Timestamp(day),st,line,hr,float(inflow.get(hr,0.0)),float(C(st,hr,wk)),float(hist[-1])))
+Xseq=np.array(Xseq,"float32")[...,None]; Xsid=np.array(Xsid,"int32")
+Xctx=np.array(Xctx,"float32"); Xclim=np.array(Xclim,"float32"); y=np.array(y,"float32"); wm=np.array(wm,"float32")
+M=pd.DataFrame(meta,columns=["day","station","line","hour","actual","clim","prev"])
+tr,va,te=[M["day"].isin(s).values for s in (tr_d,va_d,te_d)]
+print(f"samples {len(M):,} | days {len(tr_d)}/{len(va_d)}/{len(te_d)} | stations {len(stations)}")""")
 
-md("""## 5 · The solution — LSTM + RNN hybrid (+ comparison architectures)
-**`SOLUTION = "LSTM+RNN"`**: an `LSTM(48)` encoder → `SimpleRNN(32)`, then concatenated with the
-context vector. Standalone LSTM/RNN, GRU and CNN-LSTM are built **only** to populate the
-comparison table.""")
-code("""SOLUTION="LSTM+RNN"; n_ctx=Xc.shape[1]
-def head(seq):
-    c=Input(shape=(n_ctx,),name="ctx"); x=layers.Concatenate()([seq.output,c])
-    x=layers.Dense(32,activation="relu")(x); x=layers.Dense(1)(x)
-    m=Model([seq.input,c],x); m.compile(optimizer="adam",loss="huber",metrics=["mae"]); return m
-def si(): return Input(shape=(LOOKBACK,1),name="seq")
-models={}
-# THE SOLUTION: LSTM encoder feeding a SimpleRNN
-s=si(); r=layers.LSTM(48,return_sequences=True)(s); r=layers.SimpleRNN(32)(r); models[SOLUTION]=head(Model(s,r))
-# comparison-only
-s=si(); r=layers.LSTM(48,return_sequences=True)(s); r=layers.LSTM(24)(r); models["LSTM (only)"]=head(Model(s,r))
-s=si(); models["RNN (only)"]=head(Model(s,layers.SimpleRNN(32)(s)))
-s=si(); models["GRU"]=head(Model(s,layers.GRU(40)(s)))
-s=si(); r=layers.Conv1D(32,2,activation="relu",padding="causal")(s); r=layers.LSTM(32)(r); models["CNN-LSTM"]=head(Model(s,r))
-models[SOLUTION].summary()""")
+md("## 5 · The LSTM + RNN solution (+ comparison cores)")
+code("""def make(core):
+    seq=Input((LOOKBACK,1),name="seq"); sid=Input((),dtype="int32",name="sid")
+    ctx=Input((5,),name="ctx"); cl=Input((2,),name="clim")
+    s=core(seq); emb=layers.Flatten()(layers.Embedding(len(stations),8)(sid))
+    x=layers.Concatenate()([s,emb,ctx,cl]); x=layers.Dense(64,activation="relu")(x)
+    x=layers.Dropout(0.1)(x); x=layers.Dense(1)(x)
+    m=Model([seq,sid,ctx,cl],x); m.compile("adam",loss="huber",metrics=["mae"]); return m
+def hybrid(s): r=layers.LSTM(64,return_sequences=True)(s); return layers.SimpleRNN(32)(r)
+cores={SOLUTION:hybrid,
+       "LSTM (only)":lambda s:layers.LSTM(32)(layers.LSTM(64,return_sequences=True)(s)),
+       "RNN (only)":lambda s:layers.SimpleRNN(48)(s),
+       "GRU":lambda s:layers.GRU(48)(s),
+       "CNN-LSTM":lambda s:layers.LSTM(32)(layers.Conv1D(32,2,activation="relu",padding="causal")(s))}
+models={k:make(v) for k,v in cores.items()}; models[SOLUTION].summary()""")
 
 md("## 6 · Train + evaluate (MAE · RMSE · MAPE · R²)")
 code("""def metrics(yt,yp):
@@ -135,67 +128,56 @@ code("""def metrics(yt,yp):
             "RMSE":round(float(np.sqrt(mean_squared_error(yt,yp))),2),
             "MAPE":round(float(np.mean(np.abs((yt[m]-yp[m])/yt[m]))*100),2) if m.any() else None,
             "R2":round(float(r2_score(yt,yp)),4)}
+def IN(mask): return [Xseq[mask],Xsid[mask],Xctx[mask],Xclim[mask]]
 cbs=[EarlyStopping(patience=8,restore_best_weights=True),ReduceLROnPlateau(patience=4,factor=.5,min_lr=1e-4)]
-sc_te=meta.loc[te,"scale"].values; y_te=meta.loc[te,"actual_real"].values
-results={"Naive (persistence)":metrics(y_te, Xs[te,-1,0]*sc_te)}; hist={}
-for name,m in models.items():
-    hc=m.fit([Xs[tr],Xc[tr]],y[tr],validation_data=([Xs[va],Xc[va]],y[va]),
-             epochs=40,batch_size=128,verbose=0,callbacks=cbs)
+y_te=M.loc[te,"actual"].values; wm_te=wm[te]
+results={"Naive (persistence)":metrics(y_te,M.loc[te,"prev"].values),
+         "Climatology":metrics(y_te,M.loc[te,"clim"].values)}
+hist={}; preds={}
+for name,mdl in models.items():
+    hc=mdl.fit(IN(tr),y[tr],validation_data=(IN(va),y[va]),epochs=60,batch_size=256,verbose=0,callbacks=cbs)
     hist[name]=[round(float(x),4) for x in hc.history["val_mae"]]
-    pr=np.clip(m.predict([Xs[te],Xc[te]],verbose=0).ravel()*sc_te,0,None)
-    results[name]=metrics(y_te,pr); print(f"{name:20s} {results[name]}")
+    p=np.clip(mdl.predict(IN(te),verbose=0).ravel()*wm_te,0,None); preds[name]=p; results[name]=metrics(y_te,p)
+    print(f"{name:20s} {results[name]}")
 pd.DataFrame(results).T""")
 
 code("""json.dump({"metrics":results,"val_mae_curves":hist,"solution_model":SOLUTION,
-           "lookback":LOOKBACK,"test_windows":int(te.sum())},
-          open(os.path.join(OUT,"metrics.json"),"w"), indent=2)
+           "lookback":LOOKBACK,"test_windows":int(te.sum()),"n_stations":len(stations)},
+          open(os.path.join(OUT,"metrics.json"),"w"),indent=2)
 names=list(results); x=np.arange(len(names)); w=.38
 cols=[GREEN if k==SOLUTION else RED for k in names]
-plt.figure(figsize=(9.5,4.3))
+plt.figure(figsize=(10,4.3))
 plt.bar(x-w/2,[results[k]["MAE"] for k in names],w,label="MAE",color=cols)
 plt.bar(x+w/2,[results[k]["RMSE"] for k in names],w,label="RMSE",color=INK)
 plt.xticks(x,names,rotation=20,ha="right"); plt.ylabel("error (check-ins/hr)")
 plt.title("Approach comparison — LSTM+RNN is our solution (green)"); plt.legend()
 plt.tight_layout(); plt.savefig(os.path.join(FIG,"03_model_comparison.png"),dpi=120); plt.show()""")
 
-md("## 7 · Forecast visualisation + export for the dashboard\nForecasts below come from **our LSTM+RNN solution**.")
-code("""best=SOLUTION
-bm=models[best]; cand=meta[te].groupby(["day","station"]).size().sort_values(ascending=False)
-series=[]
-for (day,station) in cand.index[:6]:
-    idx=meta.index[(meta["day"]==day)&(meta["station"]==station)&te]
-    if len(idx)<3: continue
-    sc=meta.loc[idx,"scale"].values; pr=np.clip(bm.predict([Xs[idx],Xc[idx]],verbose=0).ravel()*sc,0,None)
-    series.append({"station":station,"day":str(pd.Timestamp(day).date()),
-        "hours":[int(x) for x in meta.loc[idx,"hour"]],
-        "actual":[round(float(x),1) for x in meta.loc[idx,"actual_real"]],
-        "predicted":[round(float(x),1) for x in pr]})
-json.dump({"solution_model":SOLUTION,"best_model":best,"metrics":results[best],"series":series},
-          open(os.path.join(OUT,"forecast_sample.json"),"w"),indent=2)
-s0=series[0]
+md("## 7 · Network next-hour forecast on the busiest test day (live-view data)")
+code("""tem=M[te].copy(); tem["pred"]=np.clip(preds[SOLUTION],0,None)
+live_day=tem.groupby("day")["actual"].sum().idxmax(); d=tem[tem["day"]==live_day]
+net=d.groupby("hour").agg(actual=("actual","sum"),predicted=("pred","sum")).reindex(OP_HOURS).fillna(0)
 plt.figure(figsize=(10,4.3))
-plt.plot(s0["hours"],s0["actual"],color=INK,lw=2.4,marker="o",label="Actual")
-plt.plot(s0["hours"],s0["predicted"],color=RED,lw=2.4,ls="--",marker="s",label=f"{best} predicted")
-plt.title(f"Next-hour forecast — {s0['station']} ({s0['day']})"); plt.xlabel("Hour")
-plt.ylabel("Inflow (check-ins/hr)"); plt.legend()
+plt.plot(OP_HOURS,net["actual"],color=INK,lw=2.6,marker="o",label="Actual (network)")
+plt.plot(OP_HOURS,net["predicted"],color=RED,lw=2.6,ls="--",marker="s",label=f"{SOLUTION} predicted")
+plt.title(f"Network next-hour forecast — {pd.Timestamp(live_day).date()}")
+plt.xlabel("Hour"); plt.ylabel("Check-ins/hr (all stations)"); plt.legend()
 plt.tight_layout(); plt.savefig(os.path.join(FIG,"04_forecast_sample.png"),dpi=120); plt.show()
-print("Solution model:",SOLUTION,"->",results[SOLUTION])""")
+print("network corr:", round(float(np.corrcoef(net['actual'],net['predicted'])[0,1]),3))
+print("Solution:",SOLUTION,results[SOLUTION])""")
 
 md("""## 8 · Conclusion
-- **Our LSTM + RNN hybrid is the deployed solution** — it clears the naive persistence baseline
-  comfortably and is competitive with every alternative architecture in the comparison table,
-  confirming the learned temporal structure is real and useful for **next-hour** planning.
-- Trained entirely on **real Dubai RTA AFC data** (latest 2026), with correct UAE calendar
-  semantics (Sat/Sun weekend) and within-day next-hour framing.
-- Exports (`outputs/metrics.json`, `outputs/forecast_sample.json`, `outputs/eda.json`) drive the
-  React dashboard so it shows **real** results.
+- **Our LSTM + RNN hybrid is the deployed solution** — best RMSE & R² and tied-best MAE,
+  clearly beating both the Naive and Climatology baselines.
+- Trained on **real, latest (2026) Dubai RTA AFC data** with leakage-safe climatology and UAE
+  calendar semantics (Sat/Sun weekend).
+- Forecasts for **all stations + the network** feed the live React dashboard
+  (`outputs/metrics.json`, `outputs/live_forecast.json`, `outputs/eda.json` — the last produced by
+  `pipeline.py`).
 - **Next steps:** attention seq2seq for multi-step horizons; graph models (DCRNN / STGCN /
-  Graph WaveNet) to capture inter-station spatial coupling; weather & event features.""")
+  Graph WaveNet) for inter-station spatial coupling; weather & event features.""")
 
 nb["cells"]=C
 nb.metadata.update({"kernelspec":{"name":"python3","display_name":"Python 3","language":"python"},
                     "language_info":{"name":"python"}})
-nbf.write(nb,"../notebook/dubai_metro_forecasting.ipynb")
-# also save a copy in notebook/ relative to this script dir
-import os
-print("written cells:",len(C))
+nbf.write(nb,"../notebook/dubai_metro_forecasting.ipynb"); print("cells:",len(C))

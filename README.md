@@ -13,12 +13,15 @@ add trains and staff *before* a surge — trained on **real Dubai RTA Automated 
 ---
 
 ## ✨ Highlights
-- **Real data, real next-hour forecasting** — 559k+ real check-in taps, 60 real operating days,
-  65 stations. Within-day windows (no leakage) predict the next hour.
-- **LSTM + RNN hybrid** solution in TensorFlow/Keras, benchmarked against a naive baseline.
-- **Metrics:** MAE · RMSE · MAPE · R² (solution ≈ **MAE 4.8 / R² 0.87**, ~11% better than naive).
+- **Real, latest data** — Dubai RTA AFC check-in taps, **2026 only** (the current operating
+  regime), ~500k taps across 42 real days and 53 stations. Within-day windows, no leakage.
+- **LSTM + RNN hybrid** solution (`LSTM(64) → SimpleRNN(32)`) with a learned **station embedding**
+  and **climatology** prior. Best RMSE & R² and tied-best MAE vs LSTM/RNN/GRU/CNN-LSTM, and it
+  clearly beats the **Naive** and **Climatology** baselines (≈ **MAE 4.5 / R² 0.87**).
+- **Every station + network-wide**, with a **live** simulated clock that plays the day forward
+  (actual-so-far + next-hour forecast + surge alerts) — built for a live presentation.
 - **Modern dashboard** — React + TypeScript, Framer Motion, Recharts, dark glassmorphism Metro
-  theme. Reads the notebook's real exported JSON (no mock data).
+  theme. Reads the pipeline's real exported JSON (no mock data).
 
 ## 🗂️ Repository structure
 ```
@@ -28,7 +31,7 @@ Metro-Passenger-Forecasting/
 ├── notebook/
 │   ├── dubai_metro_forecasting.ipynb   # full executed notebook (phase 3a)
 │   └── pipeline.py                     # runnable twin of the notebook
-├── outputs/                    # metrics.json, forecast_sample.json, eda.json, figures/
+├── outputs/                    # metrics.json, live_forecast.json, eda.json, figures/
 ├── frontend/                   # React + TS dashboard (phase 3b, Netlify/Pages ready)
 └── requirements.txt
 ```
@@ -72,10 +75,13 @@ the dashboard.
   Burj Khalifa/Dubai Mall) and the morning/evening peak shape match real Dubai patterns.
 
 ## 🧠 Method (short)
-1. Aggregate real taps → hourly station inflow (operating hours 05:00–24:00).
-2. Per-station scaling + cyclical hour/day features + UAE weekend (Sat/Sun) flag.
-3. Within-day sliding windows (lookback 4h → next hour); chronological train/val/test split.
-4. Train **LSTM+RNN** (solution) + comparison models; evaluate MAE/RMSE/MAPE/R².
+1. Use **2026** taps only (latest regime — avoids the 2017→2026 distribution shift).
+2. Aggregate to hourly station inflow (operating hours 05:00–24:00).
+3. Per-station scaling + learned **station embedding** + **climatology** (station×hour×weekend,
+   train-only) + today's-**level** ratio + cyclical hour/day + UAE weekend (Sat/Sun) flag.
+4. Within-day windows (lookback 6h → next hour); chronological train/val/test split.
+5. Train **LSTM+RNN** (solution) + comparison models + Naive/Climatology baselines;
+   evaluate MAE/RMSE/MAPE/R².
 
 ## 🛣️ Future work
 Attention seq2seq for multi-step horizons; graph models (DCRNN / STGCN / Graph WaveNet) for

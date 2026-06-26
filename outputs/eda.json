@@ -21,123 +21,123 @@
     23
   ],
   "profile_all": [
-    143.9,
-    286.7,
-    475.7,
-    590.1,
-    496.6,
-    409.4,
-    410.4,
-    420.6,
-    461.9,
-    512.0,
-    592.3,
-    675.0,
-    750.3,
-    728.5,
-    682.6,
-    567.6,
-    474.7,
-    428.4,
-    157.6
+    192.0,
+    366.7,
+    591.0,
+    747.5,
+    645.2,
+    534.1,
+    533.8,
+    548.1,
+    602.6,
+    674.0,
+    784.3,
+    888.0,
+    958.8,
+    906.4,
+    865.0,
+    729.9,
+    612.6,
+    557.1,
+    203.8
   ],
   "profile_weekday": [
-    157.8,
-    316.7,
-    509.9,
-    578.9,
-    466.3,
-    351.9,
-    331.6,
-    334.8,
-    375.1,
-    429.2,
-    523.4,
-    595.9,
-    658.8,
-    631.1,
-    580.3,
-    461.5,
-    372.2,
-    341.3,
-    133.3
+    200.8,
+    388.5,
+    606.8,
+    698.6,
+    578.2,
+    437.0,
+    407.6,
+    412.9,
+    462.6,
+    538.6,
+    660.6,
+    747.2,
+    799.3,
+    738.5,
+    684.6,
+    554.0,
+    446.0,
+    415.4,
+    160.8
   ],
   "profile_weekend": [
-    119.7,
-    234.9,
-    416.6,
-    609.5,
-    548.7,
-    508.5,
-    546.6,
-    568.7,
-    611.9,
-    654.9,
-    711.4,
-    811.7,
-    908.2,
-    896.7,
-    859.5,
-    751.0,
-    651.6,
-    578.7,
-    199.4
+    174.4,
+    323.1,
+    559.4,
+    845.4,
+    779.1,
+    728.2,
+    786.1,
+    818.4,
+    882.6,
+    944.6,
+    1031.7,
+    1169.8,
+    1277.7,
+    1242.2,
+    1226.0,
+    1081.5,
+    945.9,
+    840.7,
+    290.0
   ],
   "top_stations": [
     {
       "station": "BurJuman",
-      "checkins": 29215
+      "checkins": 25948
     },
     {
       "station": "Union",
-      "checkins": 25561
+      "checkins": 22834
     },
     {
       "station": "Al Rigga",
-      "checkins": 24880
+      "checkins": 22339
     },
     {
       "station": "Mall of the Emirates",
-      "checkins": 22685
+      "checkins": 20849
     },
     {
       "station": "Burj Khalifa/ Dubai Mall",
-      "checkins": 20349
-    },
-    {
-      "station": "ADCB",
-      "checkins": 18223
+      "checkins": 18395
     },
     {
       "station": "Sharaf DG",
-      "checkins": 17748
+      "checkins": 16697
+    },
+    {
+      "station": "ADCB",
+      "checkins": 16477
     },
     {
       "station": "DMCC",
-      "checkins": 17107
+      "checkins": 15621
     },
     {
       "station": "Dubai Internet City",
-      "checkins": 16879
-    },
-    {
-      "station": "Business Bay",
-      "checkins": 16322
-    },
-    {
-      "station": "Baniyas Square",
-      "checkins": 16061
+      "checkins": 15432
     },
     {
       "station": "ONPASSIVE",
-      "checkins": 15517
+      "checkins": 15094
+    },
+    {
+      "station": "Business Bay",
+      "checkins": 14718
+    },
+    {
+      "station": "City Centre Deira",
+      "checkins": 14470
     }
   ],
   "line_split": {
-    "Green Metro Line": 171339,
-    "Red Metro Line": 387858
+    "Green Metro Line": 153762,
+    "Red Metro Line": 349548
   },
-  "n_taps": 559199,
-  "n_days": 60,
-  "n_stations": 65
+  "n_taps": 503310,
+  "n_days": 42,
+  "n_stations": 53
 }

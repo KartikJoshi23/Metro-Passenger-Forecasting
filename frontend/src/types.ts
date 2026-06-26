@@ -11,18 +11,22 @@ export interface MetricsFile {
   lookback: number;
   test_windows: number;
 }
-export interface ForecastSeries {
+export interface LiveStation {
   station: string;
-  day: string;
-  hours: number[];
+  line: string;
+  total: number;
   actual: number[];
   predicted: number[];
+  climatology: number[];
 }
-export interface ForecastFile {
-  solution_model?: string;
-  best_model: string;
+export interface LiveFile {
+  solution_model: string;
+  day: string;
+  hours: number[];
+  capacity_per_train: number;
   metrics: Metric;
-  series: ForecastSeries[];
+  network: { actual: number[]; predicted: number[] };
+  stations: LiveStation[];
 }
 export interface EdaFile {
   hours: number[];
