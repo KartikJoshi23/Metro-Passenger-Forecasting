@@ -18,8 +18,10 @@ add trains and staff *before* a surge — trained on **real Dubai RTA Automated 
 - **LSTM + RNN hybrid** solution (`LSTM(64) → SimpleRNN(32)`) with a learned **station embedding**
   and **climatology** prior. Best RMSE & R² and tied-best MAE vs LSTM/RNN/GRU/CNN-LSTM, and it
   clearly beats the **Naive** and **Climatology** baselines (≈ **MAE 4.5 / R² 0.87**).
-- **Every station + network-wide**, with a **live** simulated clock that plays the day forward
-  (actual-so-far + next-hour forecast + surge alerts) — built for a live presentation.
+- **Every station + network-wide**, anchored to the **real current Dubai time** (GST, UTC+4):
+  outside service hours it shows "metro closed"; during service it shows the current hour and the
+  **next-hour forecast**. Tabbed UI (Live / Stations / Network / Model); the Live landing fits the
+  viewport with no scrolling.
 - **Modern dashboard** — React + TypeScript, Framer Motion, Recharts, dark glassmorphism Metro
   theme. Reads the pipeline's real exported JSON (no mock data).
 

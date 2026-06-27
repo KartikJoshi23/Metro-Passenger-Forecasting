@@ -131,7 +131,7 @@ def build_dataset(h, train_days):
 #     using climatology as the "history". Drives the LIVE, current-Dubai-time dashboard:
 #     for any real clock hour we can show the expected next-hour forecast per station/network.
 # ----------------------------------------------------------------------------------
-def typical_profiles(models, ds, wk, dow):
+def typical_profiles(models, ds, wk, dow, calib=1.0):
     stations, st_idx = ds["stations"], ds["st_idx"]
     clim_at, sc_of = ds["clim_at"], ds["sc_of"]
     Xs, Xi, Xc, Xcl, scs = [], [], [], [], []
@@ -147,7 +147,7 @@ def typical_profiles(models, ds, wk, dow):
     Xs = np.array(Xs, "float32")[..., None]; Xi = np.array(Xi, "int32")
     Xc = np.array(Xc, "float32"); Xcl = np.array(Xcl, "float32"); scs = np.array(scs, "float32")
     raw = np.mean([m.predict([Xs, Xi, Xc, Xcl], verbose=0).ravel() for m in models], axis=0)
-    pred = np.clip(raw * scs, 0, None)
+    pred = np.clip(raw * scs * calib, 0, None)
     H = len(OP_HOURS); out = {}
     for i, st in enumerate(stations):
         fc = pred[i*H:(i+1)*H]
@@ -259,11 +259,25 @@ def main():
     # ---- baselines ----
     import tensorflow as tf
     from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
-    y_te = M.loc[te,"actual"].values
-    wm_te = ds["wm"][te]
+    y_te = M.loc[te,"actual"].values;  wm_te = ds["wm"][te]
+    y_va = M.loc[va,"actual"].values;  wm_va = ds["wm"][va]
+    wk_te = M.loc[te,"day"].dt.dayofweek.isin([5,6]).values
+    wk_va = M.loc[va,"day"].dt.dayofweek.isin([5,6]).values
     results, histories = {}, {}
     results["Naive (persistence)"] = metrics(y_te, M.loc[te,"prev"].values)
     results["Climatology"]         = metrics(y_te, M.loc[te,"clim"].values)
+
+    # Bias calibration (fit on held-out VAL, day-type aware): Huber targets the median but inflow
+    # is right-skewed, so raw predictions sit ~10–20% low. A single multiplicative factor per
+    # day-type removes that bias so forecasts are unbiased (no leakage — val only).
+    def calib_factors(pred_va_real):
+        def c(mask):
+            s = pred_va_real[mask].sum()
+            return float(np.clip(y_va[mask].sum()/s, 0.6, 1.8)) if (mask.sum() > 20 and s > 0) else None
+        g = float(np.clip(y_va.sum()/max(pred_va_real.sum(),1e-6), 0.6, 1.8))
+        return (c(~wk_va) or g), (c(wk_va) or g)
+    def apply_cal(raw_te_real, cwd, cwe):
+        return np.clip(raw_te_real * np.where(wk_te, cwe, cwd), 0, None)
 
     # ---- NN models ----
     n_st = len(ds["stations"])
@@ -278,20 +292,25 @@ def main():
     preds_te = {}
     # SOLUTION = ensemble of seeded LSTM+RNN hybrids (averaged) -> low variance, reliably strongest
     print(f">> Training {SOLUTION} ensemble ({len(ENSEMBLE_SEEDS)} seeds) ...")
-    sol_models, raw_te = [], []
+    sol_models, raw_te, raw_va = [], [], []
     for sd in ENSEMBLE_SEEDS:
         m, hc = train(build_model(n_st, "hybrid", sd)); sol_models.append(m)
         raw_te.append(m.predict(inputs_for(ds,te), verbose=0).ravel())
+        raw_va.append(m.predict(inputs_for(ds,va), verbose=0).ravel())
         histories.setdefault(SOLUTION, [round(float(x),4) for x in hc.history["val_mae"]])
-    preds_te[SOLUTION] = np.clip(np.mean(raw_te, axis=0) * wm_te, 0, None)
-    results[SOLUTION] = metrics(y_te, preds_te[SOLUTION]); print("   ", SOLUTION, results[SOLUTION])
+    cwd, cwe = calib_factors(np.mean(raw_va, axis=0) * wm_va)
+    CAL_WD, CAL_WE = cwd, cwe   # used for the typical-day profiles
+    preds_te[SOLUTION] = apply_cal(np.mean(raw_te, axis=0) * wm_te, cwd, cwe)
+    results[SOLUTION] = metrics(y_te, preds_te[SOLUTION])
+    print(f"    {SOLUTION} {results[SOLUTION]}  (calib wd={cwd:.2f} we={cwe:.2f})")
 
-    # comparison-only single models (seeded for reproducibility)
+    # comparison-only single models (seeded; each calibrated the same way for fairness)
     for name, kind in [("LSTM (only)","lstm"),("RNN (only)","rnn"),("GRU","gru"),("CNN-LSTM","cnnlstm")]:
         print(f">> Training {name} ...")
         m, hc = train(build_model(n_st, kind, 42))
         histories[name] = [round(float(x),4) for x in hc.history["val_mae"]]
-        preds_te[name] = np.clip(m.predict(inputs_for(ds,te), verbose=0).ravel() * wm_te, 0, None)
+        c1, c2 = calib_factors(m.predict(inputs_for(ds,va), verbose=0).ravel() * wm_va)
+        preds_te[name] = apply_cal(m.predict(inputs_for(ds,te), verbose=0).ravel() * wm_te, c1, c2)
         results[name] = metrics(y_te, preds_te[name]); print("   ", results[name])
 
     json.dump({"metrics":results,"val_mae_curves":histories,"solution_model":SOLUTION,
@@ -310,8 +329,19 @@ def main():
     plt.tight_layout(); plt.savefig(os.path.join(FIG,"03_model_comparison.png"), dpi=120); plt.close()
 
     # ---- TYPICAL-DAY PROFILES (weekday + weekend) for the LIVE current-time dashboard ----
-    prof_wd = typical_profiles(sol_models, ds, wk=0, dow=1)   # representative weekday (Tue)
-    prof_we = typical_profiles(sol_models, ds, wk=1, dow=5)   # representative weekend (Sat)
+    prof_wd = typical_profiles(sol_models, ds, wk=0, dow=1, calib=CAL_WD)   # weekday (Tue)
+    prof_we = typical_profiles(sol_models, ds, wk=1, dow=5, calib=CAL_WE)   # weekend (Sat)
+    # Make the displayed forecast unbiased vs the expected (climatology) demand, per day-type,
+    # so the landing's "expected vs forecast" overlays cleanly (shape corr is already ~0.97).
+    def debias(profiles):
+        T = sum(sum(p["typical"]) for p in profiles.values())
+        F = sum(sum(p["forecast"]) for p in profiles.values())
+        c = float(np.clip(T/max(F,1e-6), 0.7, 1.6))
+        for p in profiles.values():
+            p["forecast"] = [round(v*c,1) for v in p["forecast"]]
+        return c
+    bwd, bwe = debias(prof_wd), debias(prof_we)
+    print(f">> profile debias: weekday x{bwd:.2f}  weekend x{bwe:.2f}")
     def pack(profiles):
         sts = sorted(profiles.keys(), key=lambda s: -sum(profiles[s]["typical"]))
         stations = [{"station":s, "line":profiles[s]["line"],

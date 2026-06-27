@@ -135,25 +135,35 @@ code("""def metrics(yt,yp):
             "R2":round(float(r2_score(yt,yp)),4)}
 def IN(mask): return [Xseq[mask],Xsid[mask],Xctx[mask],Xclim[mask]]
 cbs=[EarlyStopping(patience=8,restore_best_weights=True),ReduceLROnPlateau(patience=4,factor=.5,min_lr=1e-4)]
-y_te=M.loc[te,"actual"].values; wm_te=wm[te]
+y_te=M.loc[te,"actual"].values; wm_te=wm[te]; y_va=M.loc[va,"actual"].values; wm_va=wm[va]
+wk_te=M.loc[te,"day"].dt.dayofweek.isin([5,6]).values; wk_va=M.loc[va,"day"].dt.dayofweek.isin([5,6]).values
+# bias calibration (fit on VAL, day-type aware): Huber targets the median but inflow is
+# right-skewed, so raw preds sit low; a per-day-type factor makes them unbiased (no leakage).
+def calib(pred_va):
+    def c(m):
+        s=pred_va[m].sum(); return float(np.clip(y_va[m].sum()/s,0.6,1.8)) if (m.sum()>20 and s>0) else None
+    g=float(np.clip(y_va.sum()/max(pred_va.sum(),1e-6),0.6,1.8)); return (c(~wk_va) or g),(c(wk_va) or g)
+def apply_cal(pr,cwd,cwe): return np.clip(pr*np.where(wk_te,cwe,cwd),0,None)
 results={"Naive (persistence)":metrics(y_te,M.loc[te,"prev"].values),
          "Climatology":metrics(y_te,M.loc[te,"clim"].values)}
 hist={}; preds={}
-# SOLUTION = ensemble of seeded hybrids (averaged)
-raw=[]
+# SOLUTION = ensemble of seeded hybrids (averaged) + calibration
+raw_te=[]; raw_va=[]
 for sd in ENSEMBLE_SEEDS:
     mdl=make(hybrid,sd)
     hc=mdl.fit(IN(tr),y[tr],validation_data=(IN(va),y[va]),epochs=70,batch_size=256,verbose=0,callbacks=cbs)
     hist.setdefault(SOLUTION,[round(float(x),4) for x in hc.history["val_mae"]])
-    raw.append(mdl.predict(IN(te),verbose=0).ravel())
-preds[SOLUTION]=np.clip(np.mean(raw,axis=0)*wm_te,0,None); results[SOLUTION]=metrics(y_te,preds[SOLUTION])
-print(f"{SOLUTION:20s} {results[SOLUTION]}")
-# comparison singles (seeded)
+    raw_te.append(mdl.predict(IN(te),verbose=0).ravel()); raw_va.append(mdl.predict(IN(va),verbose=0).ravel())
+cwd,cwe=calib(np.mean(raw_va,axis=0)*wm_va)
+preds[SOLUTION]=apply_cal(np.mean(raw_te,axis=0)*wm_te,cwd,cwe); results[SOLUTION]=metrics(y_te,preds[SOLUTION])
+print(f"{SOLUTION:20s} {results[SOLUTION]}  calib wd={cwd:.2f} we={cwe:.2f}")
+# comparison singles (seeded; each calibrated the same way)
 for name,core in comp_cores.items():
     mdl=make(core,42)
     hc=mdl.fit(IN(tr),y[tr],validation_data=(IN(va),y[va]),epochs=70,batch_size=256,verbose=0,callbacks=cbs)
     hist[name]=[round(float(x),4) for x in hc.history["val_mae"]]
-    preds[name]=np.clip(mdl.predict(IN(te),verbose=0).ravel()*wm_te,0,None); results[name]=metrics(y_te,preds[name])
+    c1,c2=calib(mdl.predict(IN(va),verbose=0).ravel()*wm_va)
+    preds[name]=apply_cal(mdl.predict(IN(te),verbose=0).ravel()*wm_te,c1,c2); results[name]=metrics(y_te,preds[name])
     print(f"{name:20s} {results[name]}")
 pd.DataFrame(results).T""")
 

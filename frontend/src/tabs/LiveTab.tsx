@@ -41,11 +41,10 @@ export default function LiveTab({ live, eda, clock }:
           </div>
         </div>
 
-        {st.open ? (
+        {st.open && !st.closing ? (
           <div className="lh-body">
             <div className="lh-label">
               Forecast network inflow for <b>{String(st.nextHour).padStart(2, "0")}:00</b>
-              {st.closing && <span className="muted"> · last trains</span>}
             </div>
             <div className="lh-value" style={{ color: b.color }}>{fmt(nextVal)}</div>
             <div className="lh-sub">
@@ -55,6 +54,19 @@ export default function LiveTab({ live, eda, clock }:
             </div>
             <div className="lh-pillrow">
               <span className="pill">This hour ({String(st.nowHour).padStart(2, "0")}:00): <b>{fmt(nowVal)}</b></span>
+              <span className="pill">Model: <b>{live.solution_model}</b></span>
+              <span className="pill">R² <b>{(live.metrics.R2 * 100).toFixed(0)}%</b></span>
+            </div>
+          </div>
+        ) : st.closing ? (
+          <div className="lh-body">
+            <div className="lh-label">Service winding down · last full hour</div>
+            <div className="lh-value" style={{ color: "#f4b740" }}>{fmt(nowVal)}</div>
+            <div className="lh-sub">
+              forecast check-ins this hour ({String(st.nowHour).padStart(2, "0")}:00) across all
+              {" "}{st.profile.stations.length} stations · last trains around midnight
+            </div>
+            <div className="lh-pillrow">
               <span className="pill">Model: <b>{live.solution_model}</b></span>
               <span className="pill">R² <b>{(live.metrics.R2 * 100).toFixed(0)}%</b></span>
             </div>
