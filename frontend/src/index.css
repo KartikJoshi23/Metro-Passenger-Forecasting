@@ -135,7 +135,7 @@ body {
 
 .nav { height: 66px; flex: none; display: flex; align-items: center; gap: 26px; padding: 0 22px;
   border-bottom: 1px solid var(--glass-brd); backdrop-filter: blur(12px);
-  background: rgba(8,14,28,0.5); }
+  background: rgba(8,14,28,0.5); position: relative; z-index: 60; }
 .nav-brand { display: flex; align-items: center; gap: 12px; }
 .nav-logo { display: flex; flex-direction: column; gap: 3px; }
 .nl-red, .nl-green { width: 22px; height: 4px; border-radius: 3px; }
@@ -161,7 +161,7 @@ body {
 .demo-btn:hover { color: var(--ink); border-color: var(--glass-hi); }
 .demo-btn.on { color: var(--gold); border-color: rgba(244,183,64,0.5); background: rgba(244,183,64,0.10); }
 
-.demo-panel { position: absolute; top: 54px; right: 0; z-index: 30; width: 290px;
+.demo-panel { position: absolute; top: 54px; right: 0; z-index: 70; width: 290px;
   padding: 16px; border-radius: 14px; border: 1px solid var(--glass-hi);
   background: rgba(10,16,32,0.97); backdrop-filter: blur(14px); box-shadow: var(--shadow); }
 .dp-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
