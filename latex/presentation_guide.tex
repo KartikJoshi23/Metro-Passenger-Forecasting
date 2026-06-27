@@ -1,0 +1,369 @@
+\documentclass[11pt]{article}
+
+% --- packages (all standard; compiles with pdflatex / Overleaf) ---
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=2.1cm]{geometry}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\definecolor{metroRed}{HTML}{E4002B}
+\definecolor{metroGreen}{HTML}{00A651}
+\definecolor{ink}{HTML}{0B1B3A}
+
+\titleformat{\section}{\large\bfseries\color{metroRed}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries\color{ink}}{\thesubsection}{0.6em}{}
+\setlist{nosep,leftmargin=1.4em,topsep=2pt}
+\renewcommand{\arraystretch}{1.25}
+
+\newcommand{\q}[1]{\medskip\noindent\textbf{Q. #1}\\[-2pt]}
+\newcommand{\an}[1]{\noindent\textit{A.} #1\par}
+\newcommand{\term}[1]{\noindent\textbf{\color{ink}#1} --- }
+
+\begin{document}
+
+\begin{center}
+  {\Huge\bfseries\color{metroRed} Dubai Metro Forecasting}\\[3pt]
+  {\LARGE\bfseries Presentation Playbook \& Q\,\&\,A Guide}\\[6pt]
+  {\normalsize \textbf{Team:} Kartik \;\textbullet\; Prem \;\textbullet\; Gagandeep \;\textbullet\; Sam}\\[3pt]
+  {\small Everything explained in the simplest possible language --- read once and you can defend the whole project.}\\[4pt]
+  {\color{metroGreen}\rule{0.55\textwidth}{1.2pt}}
+\end{center}
+
+% ============================================================
+\section{How we present (the plan)}
+We split the talk into \textbf{four parts}, one per teammate, each mapped to one tab of the live
+dashboard. Total $\approx$10--12 minutes, then questions.
+
+\begin{center}
+\begin{tabular}{llp{8.4cm}}
+\toprule
+\textbf{Part} & \textbf{Presenter} & \textbf{Tab \& focus}\\
+\midrule
+1. Problem \& Data        & Kartik    & Open on \textbf{Live} tab --- what we built, why it matters, the real Dubai data.\\
+2. Live Forecasting       & Prem      & \textbf{Live} + \textbf{Stations} tabs --- show the next-hour forecast at the real time, then use ``Demo'' to jump to morning rush.\\
+3. Network \& Operations  & Gagandeep & \textbf{Network} tab --- crowding across every station, and the demand patterns.\\
+4. Model \& Results       & Sam       & \textbf{Model} tab --- the algorithms, the accuracy numbers, and how we built it.\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Golden rules for the demo}
+\begin{itemize}
+  \item Start every part with \emph{one plain sentence} of what the viewer is looking at.
+  \item The clock is \textbf{real Dubai time}. If it is night during the demo, click \textbf{``◷ Demo''}
+        $\rightarrow$ turn \textbf{On} $\rightarrow$ drag the hour to \textbf{08:00} (morning rush). Say
+        ``this is a presentation override; normally it follows the real clock.''
+  \item If asked something you are unsure of, give the simple idea first, then say ``the detail is
+        in our report.'' Never bluff a number --- the numbers are on the Model tab.
+\end{itemize}
+
+% ============================================================
+\section{Part 1 --- Problem \& Data \textnormal{(Kartik)}}
+\textbf{Say:} ``Our project predicts how many people will enter each Dubai Metro station in the
+\emph{next hour}, so the operator can add trains and staff \emph{before} a crowd forms instead of
+reacting after.''
+
+\textbf{Show:} the Live tab headline number and the demand curve.
+
+\textbf{Key points to land:}
+\begin{itemize}
+  \item \textbf{The problem.} Too few trains $\rightarrow$ dangerous crowding and long waits; too
+        many $\rightarrow$ wasted energy and money. Good forecasts hit the right amount at the right time.
+  \item \textbf{Real data.} We use Dubai's official open data (RTA, via the Dubai Pulse portal):
+        real smart-card tap records. After cleaning we have \textbf{$\approx$503{,}000 entries},
+        \textbf{42 days}, \textbf{53 stations} --- all from \textbf{2026} (the latest data).
+  \item \textbf{Proof it is real.} The busiest stations our data finds --- BurJuman, Union,
+        Al~Rigga, Mall of the Emirates, Burj~Khalifa/Dubai~Mall --- are exactly Dubai Metro's known
+        busy stations. Red line carries $\approx$70\% of taps.
+  \item \textbf{Why only 2026?} Older years had very few days at much lower ridership; mixing them
+        would teach the model out-of-date patterns. Newest data = most useful.
+\end{itemize}
+
+% ============================================================
+\section{Part 2 --- Live Forecasting \textnormal{(Prem)}}
+\textbf{Say:} ``This is live. The dashboard reads the real current Dubai time and shows the forecast
+for the \emph{next} hour --- not a recording playing on a loop.''
+
+\textbf{Show \& do:}
+\begin{enumerate}
+  \item \textbf{Live tab.} Point to the big number = forecast inflow for the next clock-hour across
+        all 53 stations, with a demand label (Low/Moderate/High/Peak) and the up/down arrow vs the
+        current hour.
+  \item If the metro is closed (night), it says \textbf{``Metro closed --- first trains 05:00''}.
+        Use \textbf{Demo} to jump to 08:00 and show a busy forecast; then to 17:00 for the evening peak.
+  \item \textbf{Stations tab.} Search any station (e.g.\ ``max'', ``Energy'') --- every station has
+        its own next-hour forecast and daily curve, all tied to the same clock.
+\end{enumerate}
+
+\textbf{Concept to mention:} each station has a learned ``\textbf{ID card}'' (an \emph{embedding}),
+so the model treats a giant interchange differently from a quiet stop --- that is how one model
+serves all stations well.
+
+% ============================================================
+\section{Part 3 --- Network \& Operations \textnormal{(Gagandeep)}}
+\textbf{Say:} ``Operators do not watch one station --- they watch the whole network. This tab turns
+forecasts into action.''
+
+\textbf{Show:}
+\begin{itemize}
+  \item \textbf{Crowding outlook} for every station for the upcoming hour, sorted busiest first,
+        colour-coded. It compares forecast demand against a real train capacity figure
+        (\textbf{643 passengers per 5-car train}).
+  \item \textbf{Demand insights:} the average daily shape with clear \textbf{morning (07--09)} and
+        \textbf{evening (16--19)} peaks, weekday vs weekend, and the busiest-station ranking.
+  \item \textbf{The Dubai story:} a train from the Expo / far end can arrive already full, so even a
+        ``smaller'' station like max or Life Pharmacy is hard to board at peak --- which is why we
+        forecast \emph{every} station, not just the famous ones.
+\end{itemize}
+
+% ============================================================
+\section{Part 4 --- Model \& Results \textnormal{(Sam)}}
+\textbf{Say:} ``Here is the engine and the proof. We compared many algorithms fairly; our
+\textbf{LSTM\,+\,RNN} solution wins, and it clearly beats the simple baselines.''
+
+\textbf{Show} the comparison table and the validation chart (real day: actual vs forecast).
+
+\textbf{The headline numbers (memorise these):}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Approach} & \textbf{MAE} & \textbf{RMSE} & \textbf{MAPE} & \textbf{R$^2$}\\
+\midrule
+\textbf{\color{metroRed}LSTM+RNN (ours)} & \textbf{4.45} & \textbf{8.09} & \textbf{30\%} & \textbf{0.87}\\
+CNN-LSTM / RNN / LSTM / GRU & 4.5--4.7 & 8.1--8.7 & $\sim$31\% & 0.85--0.87\\
+Naive (persistence)        & 4.99 & 8.88 & 38\% & 0.85\\
+Climatology                & 12.5 & 23.6 & 75\% & $<0$\\
+\bottomrule
+\end{tabular}
+\end{center}
+\noindent\textbf{One-liner:} ``Lower error is better. Ours has the lowest error, and is much better
+on percentage error than the simple `repeat the last hour' guess.''
+
+% ============================================================
+\section{Concepts cheat-sheet (super simple)}
+\term{Forecasting} guessing what comes next from what already happened (like guessing tomorrow's
+weather from this week).
+
+\term{Passenger inflow} how many people \emph{tap in} (enter) at a station in a time slot.
+
+\term{Time series} a list of numbers in time order (people each hour, hour after hour).
+
+\term{Neural network} a computer model that learns patterns from many examples instead of being
+given fixed rules.
+
+\term{RNN (Recurrent Neural Network)} a neural network \emph{with a memory}. It reads a sequence one
+step at a time and remembers what it just saw --- like reading a sentence word by word and keeping
+the earlier words in mind. Great for time series.
+
+\term{LSTM (Long Short-Term Memory)} a smarter RNN. It has tiny ``gates'' that decide what to
+\emph{keep}, what to \emph{forget}, and what to \emph{output}, so it can remember important things
+for a long time and ignore noise --- like a student with a good notebook who keeps key facts and
+drops the rest.
+
+\term{GRU (Gated Recurrent Unit)} a lighter, faster cousin of the LSTM with fewer gates --- similar
+idea, slightly simpler.
+
+\term{CNN (Convolutional Neural Network)} usually used for images; it slides a small window to spot
+\emph{local} patterns. In \textbf{CNN-LSTM}, the CNN spots short bursts and the LSTM tracks them
+over time.
+
+\term{Our hybrid (LSTM $\Vert$ RNN)} we run an LSTM \emph{and} a SimpleRNN on the same input
+side-by-side and join their answers --- the LSTM brings longer memory, the RNN a quick read of
+recent momentum.
+
+\term{Ensemble} ask several models and average their answers --- like asking several friends and
+taking the average guess. Averaging cancels out random luck, so results are steadier and a bit
+better. Our solution averages three trained copies.
+
+\term{Station embedding} a small set of numbers the model \emph{learns} as an ``ID card'' for each
+station, so it knows BurJuman behaves differently from a quiet stop.
+
+\term{Climatology} the ``usual'' pattern --- the historical average for that station, hour and
+weekday (e.g.\ ``8\,am is usually busy''). We feed it as a hint, and also use it as a baseline.
+
+\term{Calibration} a final nudge so predictions are not always a little too low or too high ---
+like fixing a ruler that always reads 1\,cm short.
+
+\term{Features} the clues we give the model: the hour, day-of-week, weekend flag, recent counts,
+the station ID and the ``usual'' value.
+
+\term{Training / Validation / Test} study notes / practice quiz / final exam. We measure accuracy on
+the \emph{test} data the model never saw, so the score is honest.
+
+\term{Data leakage} accidentally letting the model peek at exam answers while studying. We avoided
+it: the ``usual'' values and calibration are computed only from training/validation days, and we
+split by date (past to predict the future), never randomly.
+
+% ============================================================
+\section{Every algorithm in the comparison (what \& why)}
+\begin{itemize}
+  \item \textbf{Naive (persistence)} --- the simplest possible guess: ``next hour = this hour.''
+        It is the bar every real model must beat.
+  \item \textbf{Climatology} --- ``next hour = the usual value for this hour/day.'' Captures the
+        typical shape but ignores how busy \emph{today} actually is, so it is weak on its own.
+  \item \textbf{RNN (only)} --- a plain recurrent network reading the last 6 hours.
+  \item \textbf{LSTM (only)} --- a stacked LSTM; better long memory than a plain RNN.
+  \item \textbf{GRU} --- a lighter gated network; fast, competitive.
+  \item \textbf{CNN-LSTM} --- a CNN finds short patterns, an LSTM tracks them over time.
+  \item \textbf{LSTM\,+\,RNN (ours)} --- the parallel hybrid above, deployed as a 3-model ensemble
+        with bias calibration. Lowest error overall and the model the dashboard uses.
+\end{itemize}
+All learning models share the \emph{same} inputs (station ID, hour, weekend, recent counts, the
+``usual'' value); only the sequence core differs --- so the comparison is fair.
+
+% ============================================================
+\section{The accuracy numbers (MAE, RMSE, MAPE, R$^2$)}
+Think of an ``error'' as: \emph{predicted minus actual} passengers for one hour at one station.
+
+\term{MAE (Mean Absolute Error)} the average size of the error, ignoring sign. ``On average we are
+off by about 4--5 passengers per station-hour.'' \textbf{Lower is better.}
+
+\term{RMSE (Root Mean Squared Error)} similar, but it \emph{punishes big misses more} (it squares
+the errors first). If RMSE is much bigger than MAE, a few large mistakes exist. \textbf{Lower is better.}
+
+\term{MAPE (Mean Absolute Percentage Error)} the error as a \emph{percentage} of the real value.
+``About 30\% off on average.'' Good for comparing busy and quiet stations fairly. \textbf{Lower is better.}
+
+\term{R$^2$ (R-squared)} how much of the up-and-down pattern the model explains, from 0 to 1.
+$1.0$ = perfect; $0$ = no better than always guessing the average; \emph{negative} = worse than that.
+Our \textbf{0.87} means we explain about \textbf{87\%} of the variation. \textbf{Higher is better.}
+
+\medskip
+\noindent\textit{Quick line if asked ``why is your MAE close to others but you still win?'':} our
+\textbf{MAPE} is clearly better, meaning we are much more accurate at the quieter stations and
+off-peak hours where ``just repeat the last hour'' fails.
+
+% ============================================================
+\section{Probable questions --- with answers}
+Grouped from \textbf{easy} to \textbf{advanced}. Answers are short on purpose --- say them in your
+own words.
+
+\subsection{Easy (definitions \& basics)}
+\q{In one line, what does your project do?}
+\an{It predicts how many passengers will enter each Dubai Metro station in the next hour, live.}
+
+\q{What is forecasting?}
+\an{Using past data to estimate a future value --- here, next hour's passenger entries.}
+
+\q{Is your data real?}
+\an{Yes --- official RTA smart-card tap records from Dubai's open-data portal (Dubai Pulse), 2026.}
+
+\q{What is an RNN?}
+\an{A neural network with memory that reads a sequence step by step and remembers recent steps ---
+ideal for time-ordered data.}
+
+\q{What is an LSTM?}
+\an{A special RNN with ``gates'' that choose what to remember, forget and output, so it keeps
+important information for longer and handles long patterns better than a plain RNN.}
+
+\q{What do MAE and R$^2$ mean?}
+\an{MAE = average error size (lower is better, ours $\approx$4.5 passengers). R$^2$ = fraction of
+the pattern explained (higher is better, ours $\approx$0.87, i.e.\ 87\%).}
+
+\q{Why Dubai?}
+\an{It runs a modern automated metro that produces rich tap data, it is event- and tourism-heavy
+with big demand surges, and crowd-forecasting fits its smart-city goals.}
+
+\subsection{Medium (design choices)}
+\q{Why ``next hour'' and not next day?}
+\an{Next-hour is the operational window --- it is what lets you add a train or open gates in time.
+It is the most useful and demonstrable horizon.}
+
+\q{Why combine LSTM and RNN instead of using one?}
+\an{The LSTM brings longer memory and the SimpleRNN a compact read of recent momentum; joining them
+(and averaging an ensemble) is steadier and scores best in our fair comparison.}
+
+\q{Difference between LSTM and GRU?}
+\an{Both are gated RNNs. LSTM has three gates and a separate memory cell; GRU merges them into two
+gates --- simpler and faster, often similar accuracy.}
+
+\q{What is the naive baseline and why include it?}
+\an{``Next hour = this hour.'' It is the simplest guess; if a model can't beat it, the model is
+pointless. Ours beats it on every metric.}
+
+\q{What is climatology and why is it a baseline?}
+\an{The historical average for that station/hour/weekday --- the ``usual.'' It captures the typical
+shape but not how busy today is, so alone it is weak (it even scores negative R$^2$ on our test).}
+
+\q{Why use only 2026 data?}
+\an{$\sim$90\% of the available days are 2026 at today's ridership level; the few old days are much
+lower-volume. Mixing them creates a train/test mismatch and teaches outdated patterns.}
+
+\q{What is an ensemble and why does averaging help?}
+\an{Training the same model a few times gives slightly different results due to randomness;
+averaging them cancels that random noise, lowering error and making the rank stable run-to-run.}
+
+\q{How is the live clock built? What happens at night?}
+\an{We compute Dubai time directly (UTC$+$4, no daylight saving). Outside service hours it shows
+``metro closed, first trains 05:00''; during service it shows the next-hour forecast. A demo
+override lets us simulate any hour for presentations.}
+
+\q{How did you avoid data leakage?}
+\an{We split by date (train on earlier days, test on later days), and compute the climatology and
+calibration only from training/validation data --- the test days are never used to build features.}
+
+\subsection{Advanced (technical depth)}
+\q{Your forecast first looked $\sim$15\% too low. Why, and how did you fix it?}
+\an{We trained with the Huber loss, which targets the \emph{median}. Hourly inflow is
+right-skewed (lots of small values, occasional big peaks), so the median sits below the mean ---
+the model under-predicts. We fixed it with a multiplicative \emph{bias calibration} factor (one for
+weekdays, one for weekends) fit only on the validation set, which makes the forecasts unbiased
+without touching test data.}
+
+\q{Why is climatology's R$^2$ negative?}
+\an{Because each sampled day has a different overall level; a fixed historical average can be
+systematically off for a given day, so it does worse than simply predicting the global mean ---
+that is what a negative R$^2$ means. The recurrent model fixes this by reading how busy today is.}
+
+\q{Why a chronological split instead of a random one?}
+\an{This is a time-series task --- in real life you predict the future from the past. A random split
+could let the model ``see'' future days during training, inflating the score. Chronological keeps it honest.}
+
+\q{Why does a one-step next-hour model lag at the very tip of a peak?}
+\an{It predicts each hour from the hours just before it; right at a sharp peak those recent hours are
+still rising, so a single-step forecast slightly under-shoots the exact peak. Our climatology hint
+and ``today's level'' feature reduce it (network tracking $\approx$0.83 on a real day; the typical
+curve overlays at $\approx$0.99). Multi-step sequence-to-sequence / attention models predict the
+whole horizon at once and reduce this further --- our planned future work.}
+
+\q{What exactly is the station embedding?}
+\an{A lookup table that maps each station ID to a small learned vector (8 numbers). The network
+learns these during training so stations with similar behaviour get similar vectors --- it lets one
+shared model specialise per station without a separate model each.}
+
+\q{Stations affect each other --- why not a Graph Neural Network (DCRNN / STGCN)?}
+\an{Spatial graph models (DCRNN, STGCN, Graph WaveNet) capture how a surge propagates between
+connected stations and are a strong next step. We deliberately scoped to a robust, explainable
+recurrent solution first; the graph extension is in our future-work list.}
+
+\q{What are the limitations of your data and results?}
+\an{The open extract is a \emph{sample} of taps, so absolute counts are scaled and a single day's
+level varies. We handle it with per-station scaling and calibration, and we are transparent that the
+shapes and rankings are real even if raw magnitudes are sampled. Full-population AFC data would
+sharpen the absolute numbers.}
+
+\q{How would you take this to production?}
+\an{Stream live AFC taps into the same hourly aggregation, run the trained ensemble each hour, and
+push next-hour forecasts and crowding alerts to the control room; retrain periodically to track
+drift (new lines, events, behaviour change).}
+
+\q{Why parallel LSTM $\Vert$ RNN rather than stacking them?}
+\an{Stacking a SimpleRNN after an LSTM sometimes discards useful detail and was unstable in our
+tests. Running them in parallel and concatenating keeps both representations and reliably matches or
+beats either alone, especially as an averaged ensemble.}
+
+\q{Which metric matters most here, and why?}
+\an{For safety/operations we care about large misses at busy times, so \textbf{RMSE} (which punishes
+big errors) and \textbf{MAPE} (fairness across station sizes) matter most. Our model leads on both,
+which is the real argument --- not just a tiny MAE edge.}
+
+\bigskip
+\begin{center}\small\color{ink}\rule{0.4\textwidth}{0.8pt}\\[4pt]
+\textit{Speak simply, show the live demo, and let the Model tab's numbers do the arguing.}
+\end{center}
+
+\end{document}

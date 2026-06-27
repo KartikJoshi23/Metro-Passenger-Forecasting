@@ -1,8 +1,12 @@
-# LaTeX report → PDF (for NotebookLM)
+# LaTeX documents → PDF
 
-`main.tex` is a concise, self-contained project summary intended to be compiled to PDF and
-uploaded to **NotebookLM** as a source for generating a slide deck. It uses only standard
-packages (geometry, booktabs, xcolor, titlesec, enumitem, hyperref).
+Two compilable documents (standard packages only: geometry, booktabs, xcolor, titlesec, enumitem,
+hyperref):
+
+| File | Purpose |
+|---|---|
+| `main.tex` | Concise project summary → PDF for **NotebookLM** (slide-deck source). Embeds 3 figures. |
+| `presentation_guide.tex` | **Presentation playbook & Q&A** — 4-part talk plan, every concept/algorithm/metric explained in plain language, and a graded easy→advanced question bank. Text-only (no figures needed). |
 
 ## Required files
 `main.tex` embeds three figures. Upload these alongside `main.tex` (they live in the **repo root**):
