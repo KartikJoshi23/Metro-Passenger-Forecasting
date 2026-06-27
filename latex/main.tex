@@ -4,6 +4,10 @@
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
 \usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage{graphicx}
+% look for figures in the current dir (Overleaf: upload the .png files alongside this file)
+% and in the parent dir (local: images live in the repo root, main.tex in latex/).
+\graphicspath{{./}{../}}
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage{titlesec}
@@ -72,6 +76,13 @@ operating window 05:00--24:00. The busiest stations recovered from the data --- 
 Al~Rigga, Mall of the Emirates, Burj~Khalifa/Dubai~Mall --- match Dubai Metro's known hotspots,
 confirming the signal is authentic. Red-line taps ($\approx$70\%) dominate Green-line taps.
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.92\textwidth]{demandsignal.png}
+  \caption{Real Dubai demand signal: average hourly inflow profile (clear morning and evening
+  peaks; weekday vs.\ weekend) and the busiest stations.}
+\end{figure}
+
 % ======================= METHOD =======================
 \section{Method}
 \textbf{Framing.} For each (day, station) we slide a 6-hour window and predict the next hour,
@@ -117,6 +128,13 @@ Climatology         & 12.49 & 23.57 & 75.0 & $-$0.07\\
 \end{tabular}
 \end{center}
 
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.78\textwidth]{modelcomparison.png}
+  \caption{Approach comparison (lower is better). The LSTM\,+\,RNN solution (green) has the
+  lowest error among all architectures and both baselines.}
+\end{figure}
+
 \noindent\textbf{Key findings.}
 \begin{itemize}
   \item The hybrid lowers MAE by $\approx$11\% versus naive persistence and is far better on MAPE
@@ -128,6 +146,13 @@ Climatology         & 12.49 & 23.57 & 75.0 & $-$0.07\\
   \item Climatology alone is weak (negative R$^2$): the day's overall level matters, which the
         recurrent model captures from recent hours.
 \end{itemize}
+
+\begin{figure}[h]
+  \centering
+  \includegraphics[width=0.80\textwidth]{validationchart.png}
+  \caption{Validation on a real held-out day (2026-03-16): network-level actual vs.\ LSTM\,+\,RNN
+  next-hour forecast (correlation $\approx 0.83$).}
+\end{figure}
 
 % ======================= DASHBOARD =======================
 \section{Live Dashboard}
