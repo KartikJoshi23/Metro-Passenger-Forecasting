@@ -32,9 +32,19 @@ Metro-Passenger-Forecasting/
 ├── data/                       # raw RTA CSVs go in data/raw/ (gitignored, you download)
 ├── notebook/
 │   ├── dubai_metro_forecasting.ipynb   # full executed notebook (phase 3a)
-│   └── pipeline.py                     # runnable twin of the notebook
+│   ├── pipeline.py                     # runnable twin of the notebook (writes outputs/)
+│   └── _build_notebook.py              # regenerates the .ipynb from source
 ├── outputs/                    # metrics.json, live_forecast.json, eda.json, figures/
 ├── frontend/                   # React + TS dashboard (phase 3b, Netlify/Pages ready)
+│   └── src/
+│       ├── tabs/               # Live / Stations / Network / Model tabs
+│       ├── components/         # NavBar, charts, crowding, footer, background
+│       ├── useDubaiClock.ts    # real Dubai-time (GST, UTC+4) hook
+│       ├── live.ts             # current-time → next-hour forecast state
+│       └── data/               # JSON exported from the model (the dashboard's data)
+├── latex/                      # concise project report → PDF (phase 4, for NotebookLM)
+├── *.png                       # report figures (uploaded to Overleaf alongside main.tex)
+├── netlify.toml                # Netlify build config (base = frontend)
 └── requirements.txt
 ```
 
@@ -82,18 +92,24 @@ the dashboard.
 3. Per-station scaling + learned **station embedding** + **climatology** (station×hour×weekend,
    train-only) + today's-**level** ratio + cyclical hour/day + UAE weekend (Sat/Sun) flag.
 4. Within-day windows (lookback 6h → next hour); chronological train/val/test split.
-5. Train **LSTM+RNN** (solution) + comparison models + Naive/Climatology baselines;
-   evaluate MAE/RMSE/MAPE/R².
+5. Solution = **seeded ensemble** of a parallel `LSTM(64) ‖ SimpleRNN(48)` hybrid (averaged →
+   reproducible, low variance). Comparison: LSTM, RNN, GRU, CNN-LSTM + Naive/Climatology baselines.
+6. **Bias calibration** fit on the held-out validation set (Huber → median under-shoots
+   right-skewed inflow; a day-type factor makes forecasts unbiased). Metrics: MAE/RMSE/MAPE/R².
 
-## ⚠️ Why the next-hour forecast shows a small peak lag
-The model predicts each hour from the **preceding** hours, so at sharp turning points (the very
-tip of a rush-hour peak) the most recent observed hours are still rising — a one-step-ahead
-forecast therefore slightly under-shoots the single peak hour and can appear shifted by up to one
-interval. This is an inherent property of **one-step recursive forecasting**, not a training
-fault: the climatology prior and the today's-level feature reduce it (the network curve tracks at
-**corr ≈ 0.93**), and it is most visible only at individual small, noisy stations — the aggregated
-network view stays tight. Multi-step sequence-to-sequence / attention decoders (future work)
-predict the whole horizon jointly and reduce peak lag further.
+## 📄 Project report (LaTeX → PDF)
+`latex/main.tex` is a concise, compilable summary for generating a slide deck (e.g. NotebookLM).
+Paste it into a blank **Overleaf** project, upload the three root figures
+(`demandsignal.png`, `modelcomparison.png`, `validationchart.png`), and download the PDF. See
+`latex/README.md`.
+
+## ⚠️ Note on next-hour forecasting
+The model predicts each hour from the **preceding** hours, so at the very tip of a rush-hour peak a
+one-step-ahead forecast can slightly under-shoot the single peak hour at small, noisy stations —
+an inherent property of one-step recursive forecasting. The climatology prior, today's-level
+feature and validation-set bias calibration keep it tight: the network view tracks at
+**corr ≈ 0.83** on a real held-out day and the typical-day curve overlays at **corr ≈ 0.99**.
+Multi-step sequence-to-sequence / attention decoders (future work) reduce peak lag further.
 
 ## 🛣️ Future work
 Attention seq2seq for multi-step horizons; graph models (DCRNN / STGCN / Graph WaveNet) for
