@@ -189,6 +189,23 @@ body {
 .nav-clock-txt b { font-size: 1.05rem; font-variant-numeric: tabular-nums; }
 .nav-clock-txt span { font-size: 0.64rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
 
+/* ---------- global crowd alert ---------- */
+.crowd-alert { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 90;
+  display: flex; align-items: flex-start; gap: 14px; width: min(560px, 92vw); padding: 14px 16px;
+  border-radius: 14px; border: 1px solid rgba(244,183,64,0.55);
+  background: linear-gradient(100deg, rgba(40,28,10,0.96), rgba(46,20,24,0.96));
+  box-shadow: 0 20px 50px -16px rgba(0,0,0,0.8); backdrop-filter: blur(12px); }
+.ca-icon { font-size: 1.4rem; line-height: 1.4; color: var(--gold); flex: none; }
+.ca-body { flex: 1; }
+.ca-title { font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.ca-text { font-size: 0.92rem; color: var(--ink); margin-top: 3px; }
+.ca-chips { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 9px; }
+.ca-chip { font-size: 0.74rem; color: var(--muted); padding: 4px 9px; border-radius: 999px;
+  border: 1px solid var(--glass-brd); background: rgba(255,255,255,0.03); }
+.ca-close { flex: none; cursor: pointer; background: none; border: none; color: var(--muted);
+  font-size: 1.3rem; line-height: 1; padding: 0 2px; transition: color 0.2s; }
+.ca-close:hover { color: var(--ink); }
+
 .tab-stack { display: flex; flex-direction: column; gap: 18px; }
 .badge.off { background: rgba(100,116,139,0.12); border-color: rgba(100,116,139,0.4); color: #94a3b8; }
 .badge.off .dot { background: #94a3b8; animation: none; }

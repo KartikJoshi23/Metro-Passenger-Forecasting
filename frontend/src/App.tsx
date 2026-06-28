@@ -6,6 +6,7 @@ import LiveTab from "./tabs/LiveTab";
 import StationsTab from "./tabs/StationsTab";
 import NetworkTab from "./tabs/NetworkTab";
 import ModelTab from "./tabs/ModelTab";
+import CrowdAlert from "./components/CrowdAlert";
 import { useDubaiClock } from "./useDubaiClock";
 
 import metrics from "./data/metrics.json";
@@ -28,6 +29,7 @@ export default function App() {
   return (
     <>
       <Background />
+      <CrowdAlert live={L} clock={clock} />
       <div className={`shell ${tab === "live" ? "no-scroll" : ""}`}>
         <NavBar tab={tab} setTab={setTab} clock={clock} open={open} demo={demo} setDemo={setDemo} />
         <main className="tab-body">
