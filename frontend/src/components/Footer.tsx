@@ -11,7 +11,7 @@ export default function Footer({ slim = false }: { slim?: boolean }) {
           Data:{" "}
           <a href="https://www.dubaipulse.gov.ae/data/rta-rail/rta_metro_ridership-open" target="_blank" rel="noreferrer">
             Dubai Pulse — RTA Metro Ridership (Open Data)
-          </a>{" "}· latest 2026 records
+          </a>{" "}· latest 2026 records · magnitudes scaled to official RTA per-station ridership
         </>
       )}
     </div>

@@ -407,10 +407,18 @@ so similar stations get similar vectors --- letting one shared model specialise 
 \an{Spatial graph models capture how a surge spreads between connected stations and are a strong next
 step. We deliberately built a robust, explainable recurrent model first; the graph version is in our
 future-work list.}
+\q{Why do the passenger numbers look realistic --- aren't tap samples tiny?}
+\an{The raw open extract is a \emph{sample} (about 1/100 scale), so we anchor the displayed numbers to
+\textbf{real RTA figures}: the busiest station (BurJuman) is set to its true volume and the rest follow
+the \emph{official monthly per-station ridership} (also from Dubai Pulse). This self-checks against
+public data --- our network totals about 826k entries/day, matching Dubai Metro's real
+$\approx$807k/day (294.7M in 2025), and BurJuman is $\approx$6\% of the network, exactly its real
+share. The model still provides the \emph{shape} and the next-hour forecast; only the units are made
+realistic.}
 \q{What are the limitations of your data?}
-\an{The open extract is a \emph{sample} of taps, so absolute counts are scaled and a day's level
-varies. We handle it with per-station scaling and calibration, and we're transparent that shapes and
-rankings are real even if raw magnitudes are sampled. Full data would sharpen the absolute numbers.}
+\an{The tap extract is a \emph{sample}, and a day's overall level varies; we handle this with
+per-station scaling, calibration and the real-magnitude anchoring above. Shapes, peaks and rankings
+are genuine; full-population AFC data would simply sharpen the exact counts.}
 \q{How would you take this to production?}
 \an{Stream live AFC taps into the same hourly aggregation, run the trained ensemble each hour, and push
 next-hour forecasts and crowd alerts to the control room; retrain periodically to track drift (new

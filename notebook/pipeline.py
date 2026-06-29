@@ -342,6 +342,37 @@ def main():
         return c
     bwd, bwe = debias(prof_wd), debias(prof_we)
     print(f">> profile debias: weekday x{bwd:.2f}  weekend x{bwe:.2f}")
+
+    # ---- Anchor displayed magnitudes to REAL RTA per-station ridership ----
+    # The tap extract is a sample (~1/100 scale) and flattens the busy/quiet gap. We rescale each
+    # station so the busiest (BurJuman) matches its real ~entries/day and the rest follow the
+    # OFFICIAL monthly per-station ratios (Dubai Pulse). The model's hourly SHAPE and next-hour
+    # dynamics are untouched — only the units become realistic head-counts.
+    BURJ_DAILY = 48000.0                       # BurJuman real ~entries/day (≈17.8M/yr)
+    def real_scale(prof_a, prof_b):
+        mfiles = sorted(glob.glob(os.path.join(RAW, "metro_passengers_trips_by_station_monthly_*.csv")))
+        weight = {}
+        if mfiles:
+            m = pd.read_csv(mfiles[0]).drop_duplicates()
+            m["st"] = m["metro_station"].str.replace(" Metro Station","",regex=False).str.strip()
+            m = m[m["year_key"].astype(str) == "2026"]
+            mm = m.groupby("st")["trips"].mean()
+            burj = float(mm.get("BurJuman", mm.max()))
+            weight = {s: float(v)/burj for s, v in mm.items()}   # share relative to BurJuman
+        samp = {s: sum(prof_a[s]["typical"]) for s in prof_a}
+        samp_burj = max(samp.get("BurJuman", max(samp.values())), 1e-6)
+        for prof in (prof_a, prof_b):
+            for s, p in prof.items():
+                w = weight.get(s);  w = (samp[s]/samp_burj) if w is None else w
+                f = (BURJ_DAILY * w) / max(sum(prof_a[s]["typical"]), 1e-6)
+                p["typical"]  = [round(v*f, 1) for v in p["typical"]]
+                p["forecast"] = [round(v*f, 1) for v in p["forecast"]]
+    old_net = sum(sum(prof_wd[s]["typical"]) for s in prof_wd)
+    real_scale(prof_wd, prof_we)
+    NET_SCALE = sum(sum(prof_wd[s]["typical"]) for s in prof_wd) / max(old_net, 1e-6)
+    print(f">> real-scale: BurJuman weekday/day={sum(prof_wd['BurJuman']['typical']):.0f}, "
+          f"net x{NET_SCALE:.0f}")
+
     def pack(profiles):
         sts = sorted(profiles.keys(), key=lambda s: -sum(profiles[s]["typical"]))
         stations = [{"station":s, "line":profiles[s]["line"],
@@ -358,6 +389,8 @@ def main():
            .agg(actual=("actual","sum"), predicted=("pred","sum")).reindex(OP_HOURS).fillna(0))
     from numpy import corrcoef
     net_corr = float(corrcoef(net["actual"], net["predicted"])[0,1])
+    # express the validation curve in the same real head-count units as the live view
+    vday_scale = NET_SCALE * old_net / max(net["actual"].sum(), 1e-6)
 
     json.dump({"solution_model":SOLUTION, "hours":OP_HOURS,
                "capacity_per_train":CAP_PER_TRAIN, "operating":[OP_HOURS[0], OP_HOURS[-1]+1],
@@ -365,8 +398,8 @@ def main():
                "weekday":pack(prof_wd), "weekend":pack(prof_we),
                "validation":{"day":str(pd.Timestamp(live_day).date()),
                              "corr":round(net_corr,3),
-                             "actual":[round(float(x),1) for x in net["actual"].values],
-                             "predicted":[round(float(x),1) for x in net["predicted"].values]}},
+                             "actual":[round(float(x*vday_scale),0) for x in net["actual"].values],
+                             "predicted":[round(float(x*vday_scale),0) for x in net["predicted"].values]}},
               open(os.path.join(OUT,"live_forecast.json"),"w"), indent=2)
 
     # ---- Fig 4: validation network actual vs predicted ----
